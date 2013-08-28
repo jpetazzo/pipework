@@ -48,6 +48,20 @@ Want to connect to those containers using their private addresses? Easy:
 Voilà!
 
 
+## Using a different netmask
+
+The IP addresses given to `pipework` are directly passed to the `ip addr`
+tool; so you can append a subnet size using traditional CIDR notation.
+
+I.e.:
+
+    pipework br1 $CONTAINERID 192.168.4.25/20
+
+Don't forget that all containers should use the same subnet size;
+pipework is not clever enough to use your specified subnet size for
+the first container, and retain it to use it for the other containers.
+
+s
 ## Connect a container to a local physical interface
 
 Let's pretend that you want to run two Hipache instances, listening on real
