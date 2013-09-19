@@ -30,7 +30,13 @@ else
 fi
 
 # Second step: find the guest (for now, we only support LXC containers)
-CGROUPMNT=$(grep ^cgroup.*devices /proc/mounts | cut -d" " -f2 | head -n 1)
+while read dev mnt fstype options dump fsck
+do
+    [ "$fstype" != "cgroup" ] && continue
+    echo $options | grep -qw devices || continue
+    CGROUPMNT=$mnt
+done < /proc/mounts
+
 [ "$CGROUPMNT" ] || {
     echo "Could not locate cgroup mount point."
     exit 1
