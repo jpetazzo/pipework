@@ -5,6 +5,11 @@ IFNAME=$1
 GUESTNAME=$2
 IPADDR=$3
 
+[ "$IPADDR" ] || {
+    echo "Syntax: pipework <hostinterface> <guest> <ipaddr>"
+    exit 1
+}
+
 # First step: determine type of first argument (bridge, physical interface...)
 if [ -d /sys/class/net/$IFNAME ]
 then
