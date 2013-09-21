@@ -1,12 +1,23 @@
 #!/bin/bash
 set -e
 
+case "$1" in
+    --wait)
+	while ! grep -q ^up$ /sys/class/net/eth1/operstate 2>/dev/null
+	do sleep 1
+	done
+	exit 0
+	;;
+esac
+
 IFNAME=$1
 GUESTNAME=$2
 IPADDR=$3
 
 [ "$IPADDR" ] || {
-    echo "Syntax: pipework <hostinterface> <guest> <ipaddr>/<subnet>"
+    echo "Syntax:"
+    echo "pipework <hostinterface> <guest> <ipaddr>/<subnet>"
+    echo "pipework --wait"
     exit 1
 }
 

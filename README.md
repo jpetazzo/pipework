@@ -61,7 +61,6 @@ Don't forget that all containers should use the same subnet size;
 pipework is not clever enough to use your specified subnet size for
 the first container, and retain it to use it for the other containers.
 
-s
 ## Connect a container to a local physical interface
 
 Let's pretend that you want to run two Hipache instances, listening on real
@@ -74,6 +73,19 @@ Note that this will use `macvlan` subinterfaces, so you can actually put
 multiple containers on the same physical interface.
 
     
+## Wait for the network to be ready
+
+Sometimes, you want the extra network interface to be up and running *before*
+starting your service. A dirty (and unreliable) solution would be to add
+a `sleep` command before starting your service; but that could break in
+"interesting" ways if the server happens to be a bit slower at one point.
+
+There is a better option: add the `pipework` script to your Docker image,
+and before starting the service, call `pipework --wait`. It will wait
+until the `eth1` interface is present and in `UP` operational state,
+then exit gracefully.
+
+
 ## Cleanup
 
 When a container is terminated (the last process of the net namespace exits),
