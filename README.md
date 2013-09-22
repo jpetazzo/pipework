@@ -2,11 +2,23 @@
 
 Pipework lets you connect together containers in arbitrarily complex scenarios.
 
-It is best used along with [docker](http://www.docker.io/), but you can also
-use it with "plain" LXC containers.
 
-Let's start with some examples of what it can do.
-We'll use docker for simplicity.
+## Docker users: read this!
+
+Pipework works with "plain" LXC containers (created with `lxc-start`),
+and therefore, it also works with the awesome [Docker](http://www.docker.io/).
+
+**Before using Pipework, please ask on the [docker-user mailing list](
+https://groups.google.com/forum/#!forum/docker-user) if there is a "native"
+way to achieve what you want to do *without* Pipework.**
+
+In the long run, Docker will allow complex scenarios, and Pipework should
+become obsolete.
+
+If there is really no other way to plumb your containers together with
+the current version of Docker, then okay, let's see how we can help you!
+
+The following examples show what Pipework can do for you and your containers.
 
 
 ## LAMP stack with a private network between the MySQL and Apache containers
@@ -18,7 +30,7 @@ Let's create two containers, running the web tier and the database tier:
 
 Now, bring superpowers to the web tier:
 
-    pipework br1 $APACHE 192.168.1.1
+    pipework br1 $APACHE 192.168.1.1/24
 
 This will:
 - create a bridge named `br1` in the docker host;
@@ -28,7 +40,7 @@ This will:
 
 Now (drum roll), let's do this:
 
-    pipework br1 $MYSQL 192.168.1.2
+    pipework br1 $MYSQL 192.168.1.2/24
 
 This will:
 - not create a bridge named `br1`, since it already exists;
@@ -43,7 +55,7 @@ Now, both containers can ping each other on the 192.168.1.0/24 subnet.
 
 Want to connect to those containers using their private addresses? Easy:
 
-    ifconfig br1 192.168.1.254
+    ip addr add 192.168.1.254/24 dev br1
 
 Voilà!
 
