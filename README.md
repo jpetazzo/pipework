@@ -98,16 +98,34 @@ until the `eth1` interface is present and in `UP` operational state,
 then exit gracefully.
 
 
+## DHCP
+
+You can use DHCP to obtain the IP address of the new interface. Just
+specify `dhcp` instead of an IP address; for instance:
+
+    pipework eth1 $CONTAINERID dhcp
+
+You need three things for this to work correctly:
+
+- obviously, a DHCP server (in the example above, a DHCP server should
+  be listening on the network to which we are connected on `eth1`);
+- the `udhcpc` DHCP client must be installed on your Docker *host*
+  (you don't have to install it in your containers, but it must be
+  present on the host);
+- the underlying network must support bridged frames.
+
+The last item might be particularly relevant if you are trying to
+bridge your containers with a WPA-protected WiFi network. I'm not 100%
+sure about this, but I think that the WiFi access point will drop frames
+originating from unknown MAC addresses; meaning that you have to go
+through extra hoops if you want it to work properly.
+
+It works fine on plain old wired Ethernet, though.
+
+
 ## Cleanup
 
 When a container is terminated (the last process of the net namespace exits),
 the network interfaces are garbage collected. The interface in the container
 is automatically destroyed, and the interface in the docker host (part of the
 bridge) is then destroyed as well.
-
-
-## Future improvement: AVAHI / DHCP auto-configuration
-
-I'm considering providing a "network configurator" docker image. This image
-will let you configure a container extra interface (eth1) using DHCP or AVAHI,
-without actually having a DHCP client or AVAHI daemon in the container itself.
