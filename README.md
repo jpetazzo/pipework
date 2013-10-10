@@ -123,6 +123,35 @@ through extra hoops if you want it to work properly.
 It works fine on plain old wired Ethernet, though.
 
 
+## Specify a custom MAC address
+
+If you need to specify the MAC address to be used (either by the `macvlan`
+subinterface, or the `veth` interface), no problem. Just add it as the
+command-line, as the last argument:
+
+    pipework eth0 $(docker run -d haproxy) 192.168.1.2 26:2e:71:98:60:8f
+
+This can be useful if your network environment requires whitelisting
+your hardware addresses (some hosting providers do that), or if you want
+to obtain a specific address from your DHCP server. Also, some projects like
+[Orchestrator](https://github.com/cvlc/orchestrator) rely on static
+MAC-IPv6 bindings for DHCPv6:
+
+    pipework br0 $(docker run -d zerorpcworker) dhcp fa:de:b0:99:52:1c
+
+**Note:** if you generate your own MAC addresses, try remember those two
+simple rules:
+
+- the lowest bit of the first byte should be `0`, otherwise, you are
+  defining a multicast address;
+- the second lowest bit of the first byte should be `1`, otherwise,
+  you are using a globally unique (OUI enforced) address.
+
+In other words, if your MAC address is `?X:??:??:??:??:??`, `X` should
+be `2`, `6`, `a`, or `e`. You can check [Wikipedia](
+http://en.wikipedia.org/wiki/MAC_address) if you want even more details.
+
+
 ## Cleanup
 
 When a container is terminated (the last process of the net namespace exits),
