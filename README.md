@@ -73,6 +73,7 @@ Don't forget that all containers should use the same subnet size;
 pipework is not clever enough to use your specified subnet size for
 the first container, and retain it to use it for the other containers.
 
+
 ## Connect a container to a local physical interface
 
 Let's pretend that you want to run two Hipache instances, listening on real
@@ -96,6 +97,16 @@ There is a better option: add the `pipework` script to your Docker image,
 and before starting the service, call `pipework --wait`. It will wait
 until the `eth1` interface is present and in `UP` operational state,
 then exit gracefully.
+
+
+## Add the interface without an IP address
+
+If for some reason you want to set the IP address from within the
+container, you can use `0/0` as the IP address. The interface will
+be created, connected to the network, and assigned to the container,
+but without configuring an IP address:
+
+    pipework br1 $CONTAINERID 0/0
 
 
 ## DHCP
