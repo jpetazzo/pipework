@@ -12,12 +12,13 @@ esac
 
 IFNAME=$1
 GUESTNAME=$2
-IPADDR=$3
-MACADDR=$4
+IPADDR=$(echo $3|cut -d@ -f1)
+GATEWAY=$(echo $3|cut -d@ -f2)
+MACADDR=$5
 
 [ "$IPADDR" ] || {
     echo "Syntax:"
-    echo "pipework <hostinterface> <guest> <ipaddr>/<subnet> [macaddr]"
+    echo "pipework <hostinterface> <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr]"
     echo "pipework <hostinterface> <guest> dhcp [macaddr]"
     echo "pipework --wait"
     exit 1
@@ -127,4 +128,8 @@ then
 else
     ip netns exec $NSPID ip addr add $IPADDR dev eth1
     ip netns exec $NSPID ip link set eth1 up
+    [ "$GATEWAY" ] && {
+	ip netns exec $NSPID ip route delete default
+	ip netns exec $NSPID ip route add default via $GATEWAY
+    }
 fi

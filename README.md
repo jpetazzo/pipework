@@ -74,6 +74,21 @@ pipework is not clever enough to use your specified subnet size for
 the first container, and retain it to use it for the other containers.
 
 
+## Setting a default gateway
+
+If you want *outbound* traffic (i.e. when the containers connects
+to the outside world) to go through the interface managed by
+Pipework, you need to change the default route of the container.
+
+This can be useful in some usecases, like traffic shaping, or if
+you want the container to use a specific outbound IP address.
+
+This can be automated by Pipework, by adding the gateway address
+after the IP address and subnet mask:
+
+    pipework br1 $CONTAINERID 192.168.4.25/20@192.168.4.1
+
+
 ## Connect a container to a local physical interface
 
 Let's pretend that you want to run two Hipache instances, listening on real
