@@ -15,6 +15,10 @@ case "$1" in
 	done
 	exit 0
 	;;
+    --verbose)
+  VERBOSE=1
+  shift 1
+  ;;
 esac
 
 IFNAME=$1
@@ -22,6 +26,10 @@ GUESTNAME=$2
 IPADDR=$(echo $3|cut -d@ -f1)
 GATEWAY=$(echo $3 | grep @ | cut -d@ -f2)
 MACADDR=$(echo $@ | awk '{print $NF}')
+
+if [ -n "$VERBOSE" ]; then
+  echo hostinterface:$IFNAME containerinterface:$CONTAINER_IFNAME guestname:$GUESTNAME ipaddr:$IPADDR gateway:$GATEWAY macaddr:$MACADDR
+fi
 
 [ "$IPADDR" ] || {
     echo "Syntax:"
