@@ -59,6 +59,10 @@ Want to connect to those containers using their private addresses? Easy:
 
 Voilà!
 
+## Setting container internal interface ##
+By default pipework creates a new interface `eth1` inside the container. In case you want to change this interface name like `eth2`, e.g., to have more than one interface set by pipework, use:
+
+`pipework br1 -i eth2 ...`
 
 ## Using a different netmask
 
