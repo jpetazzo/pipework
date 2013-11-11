@@ -13,8 +13,8 @@ esac
 IFNAME=$1
 GUESTNAME=$2
 IPADDR=$(echo $3|cut -d@ -f1)
-GATEWAY=$(echo $3|cut -d@ -f2)
-MACADDR=$5
+GATEWAY=$(echo $3 | grep @ | cut -d@ -f2)
+MACADDR=$(echo $@ | awk '{print $NF}')
 
 [ "$IPADDR" ] || {
     echo "Syntax:"
