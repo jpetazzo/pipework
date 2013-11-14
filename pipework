@@ -12,9 +12,8 @@ esac
 
 IFNAME=$1
 GUESTNAME=$2
-IPADDR=$(echo $3|cut -d@ -f1)
-GATEWAY=$(echo $3|cut -d@ -f2)
-MACADDR=$5
+IPADDR=$3
+MACADDR=$4
 
 [ "$IPADDR" ] || {
     echo "Syntax:"
@@ -85,6 +84,14 @@ else
 	echo "Maybe you meant $IPADDR/24 ?"
 	exit 1
     }
+    # Check if a gateway address was provided.
+    if echo $IPADDR | grep -q @
+    then
+        GATEWAY=$(echo $IPADDR | cut -d@ -f2)
+        IPADDR=$(echo $IPADDR | cut -d@ -f1)
+    else
+        GATEWAY=
+    fi
 fi
 
 NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME*" | head -n 1)/tasks)
@@ -129,7 +136,6 @@ else
     ip netns exec $NSPID ip addr add $IPADDR dev eth1
     ip netns exec $NSPID ip link set eth1 up
     [ "$GATEWAY" ] && {
-	ip netns exec $NSPID ip route delete default
-	ip netns exec $NSPID ip route add default via $GATEWAY
+	ip netns exec $NSPID ip route replace default via $GATEWAY
     }
 fi
