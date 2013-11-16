@@ -1,12 +1,21 @@
 #!/bin/bash
 set -e
 
+verbose="false"
 case "$1" in
     --wait)
 	while ! grep -q ^up$ /sys/class/net/eth1/operstate 2>/dev/null
 	do sleep 1
 	done
 	exit 0
+	;;
+    -v)
+	verbose="true"
+	shift
+	;;
+    --verbose)
+	verbose="true"
+	shift
 	;;
 esac
 
@@ -15,11 +24,22 @@ GUESTNAME=$2
 IPADDR=$3
 MACADDR=$4
 
+function run() {
+    [ "$verbose" == "true" ] && echo "$@"
+    "$@"
+}
+
 [ "$IPADDR" ] || {
     echo "Syntax:"
+    echo "pipework [options] ..."
     echo "pipework <hostinterface> <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr]"
     echo "pipework <hostinterface> <guest> dhcp [macaddr]"
     echo "pipework --wait"
+    echo ""
+    echo "Options:"
+    echo ""
+    echo "    -v, --verbose   Show more output"
+    echo ""
     exit 1
 }
 
@@ -41,6 +61,7 @@ else
 	    ;;
     esac
 fi
+[ "$verbose" = "true" ] && echo "$IFNAME: IFTYPE=$IFTYPE"
 
 # Second step: find the guest (for now, we only support LXC containers)
 while read dev mnt fstype options dump fsck
@@ -48,6 +69,7 @@ do
     [ "$fstype" != "cgroup" ] && continue
     echo $options | grep -qw devices || continue
     CGROUPMNT=$mnt
+    [ "$verbose" = "true" ] && echo "Found: CGROUPMNT=$CGROUPMNT"
 done < /proc/mounts
 
 [ "$CGROUPMNT" ] || {
@@ -100,42 +122,42 @@ NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME*" | head -n 1)/tasks)
     exit 1
 }
 mkdir -p /var/run/netns
-rm -f /var/run/netns/$NSPID
-ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID
+run rm -f /var/run/netns/$NSPID
+run ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID
 
 
 # Check if we need to create a bridge.
 [ $IFTYPE = bridge ] && [ ! -d /sys/class/net/$IFNAME ] && {
-    ip link add $IFNAME type bridge
-    ip link set $IFNAME up
+    run ip link add $IFNAME type bridge
+    run ip link set $IFNAME up
 }
 
 # If it's a bridge, we need to create a veth pair
 [ $IFTYPE = bridge ] && {
     LOCAL_IFNAME=vethl$NSPID
     GUEST_IFNAME=vethg$NSPID
-    ip link add name $LOCAL_IFNAME type veth peer name $GUEST_IFNAME
-    ip link set $LOCAL_IFNAME master $IFNAME
-    ip link set $LOCAL_IFNAME up
+    run ip link add name $LOCAL_IFNAME type veth peer name $GUEST_IFNAME
+    run ip link set $LOCAL_IFNAME master $IFNAME
+    run ip link set $LOCAL_IFNAME up
 }
 
 # If it's a physical interface, create a macvlan subinterface
 [ $IFTYPE = phys ] && {
     GUEST_IFNAME=macvlan$NSPID
-    ip link add link $IFNAME dev $GUEST_IFNAME type macvlan mode bridge
-    ip link set $IFNAME up
+    run ip link add link $IFNAME dev $GUEST_IFNAME type macvlan mode bridge
+    run ip link set $IFNAME up
 }
 
-ip link set $GUEST_IFNAME netns $NSPID
-ip netns exec $NSPID ip link set $GUEST_IFNAME name eth1
-[ "$MACADDR" ] && ip netns exec $NSPID ip link set eth1 address $MACADDR
+run ip link set $GUEST_IFNAME netns $NSPID
+run ip netns exec $NSPID ip link set $GUEST_IFNAME name eth1
+[ "$MACADDR" ] && run ip netns exec $NSPID ip link set eth1 address $MACADDR
 if [ "$IPADDR" = "dhcp" ]
 then
-    ip netns exec $NSPID udhcpc -qi eth1
+    run ip netns exec $NSPID udhcpc -qi eth1
 else
-    ip netns exec $NSPID ip addr add $IPADDR dev eth1
-    ip netns exec $NSPID ip link set eth1 up
+    run ip netns exec $NSPID ip addr add $IPADDR dev eth1
+    run ip netns exec $NSPID ip link set eth1 up
     [ "$GATEWAY" ] && {
-	ip netns exec $NSPID ip route replace default via $GATEWAY
+	run ip netns exec $NSPID ip route replace default via $GATEWAY
     }
 fi
