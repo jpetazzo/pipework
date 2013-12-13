@@ -115,8 +115,8 @@ ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID
     LOCAL_IFNAME=vethl$NSPID
     GUEST_IFNAME=vethg$NSPID
     ip link add name $LOCAL_IFNAME type veth peer name $GUEST_IFNAME
-    #ip link set $LOCAL_IFNAME master $IFNAME
-    brctl addif $IFNAME $LOCAL_IFNAME
+    # if ip link set is failed, then try brctl addif.
+    (ip link set $LOCAL_IFNAME master $IFNAME) || (brctl addif $IFNAME $LOCAL_IFNAME)
     ip link set $LOCAL_IFNAME up
 }
 
