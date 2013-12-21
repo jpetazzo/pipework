@@ -178,6 +178,14 @@ be `2`, `6`, `a`, or `e`. You can check [Wikipedia](
 http://en.wikipedia.org/wiki/MAC_address) if you want even more details.
 
 
+## Support Open vSwitch
+
+If you want to attach a container to the Open vSwitch bridge, no problem.
+
+    ovs-vsctl list-br
+    ovsbr0
+    pipework ovsbr0 $(docker run -d mysql /usr/sbin/mysqld_safe) 192.168.1.2/24
+    
 ## Cleanup
 
 When a container is terminated (the last process of the net namespace exits),
