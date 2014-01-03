@@ -3,7 +3,7 @@ set -e
 
 case "$1" in
     --wait)
-	while ! grep -q ^up$ /sys/class/net/eth1/operstate 2>/dev/null
+	while ! grep -q ^1$ /sys/class/net/eth1/carrier 2>/dev/null
 	do sleep 1
 	done
 	exit 0
