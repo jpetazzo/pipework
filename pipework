@@ -61,11 +61,36 @@ done < /proc/mounts
     exit 1
 }
 
-N=$(find "$CGROUPMNT" -name "$GUESTNAME*" | wc -l)
+# Try to find a cgroup matching exactly the provided name.
+N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
 case "$N" in
     0)
-	echo "Could not find any container matching $GUESTNAME."
-	exit 1
+	# If we didn't find anything, try to lookup the container with Docker.
+	if which docker >/dev/null
+	then
+	    DOCKERID=$(docker inspect -format='{{.ID}}' $GUESTNAME)
+	    [ "$DOCKERID" = "<no value>" ] && {
+		echo "Container $GUESTNAME not found, and unknown to Docker."
+		exit 1
+	    }
+	    NN=$(find "$CGROUPMNT" -name "$DOCKERID" | wc -l)
+	    case "$NN" in
+		0)
+		    echo "Container $GUESTNAME doesn't seem to be running."
+		    exit 1
+		    ;;
+		1)
+		    GUESTNAME=$DOCKERID
+		    ;;
+		*)
+		    echo "Multiple cgroup entries for container $GUESTNAME."
+		    exit 1
+		    ;;
+	    esac
+	else
+	    echo "Container $GUESTNAME not found, and Docker not installed."
+	    exit 1
+	fi
 	;;
     1)
 	true
@@ -100,7 +125,7 @@ else
     fi
 fi
 
-NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME*" | head -n 1)/tasks)
+NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/tasks)
 [ "$NSPID" ] || {
     echo "Could not find a process inside container $GUESTNAME."
     exit 1
