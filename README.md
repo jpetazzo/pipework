@@ -2,6 +2,14 @@
 
 Pipework lets you connect together containers in arbitrarily complex scenarios.
 
+**If you use VirtualBox**, you will have to update your VM network settings.
+Open the settings panel for the VM, go the the "Network" tab, pull down the
+"Advanced" settings. Here, the "Adapter Type" should be `pcnet` (the full
+name is something like "PCnet-FAST III"), instead of the default `e1000`
+(Intel PRO/1000). Also, "Promiscuous Mode" should be set to "Allow All".
+If you don't do that, bridged containers won't work, because the virtual
+NIC will filter out all packets with a different MAC address.
+
 
 ## Docker users: read this!
 
@@ -33,6 +41,7 @@ Now, bring superpowers to the web tier:
     pipework br1 $APACHE 192.168.1.1/24
 
 This will:
+
 - create a bridge named `br1` in the docker host;
 - add an interface named `eth1` to the `$APACHE` container;
 - assign IP address 192.168.1.1 to this interface,
@@ -43,12 +52,23 @@ Now (drum roll), let's do this:
     pipework br1 $MYSQL 192.168.1.2/24
 
 This will:
+
 - not create a bridge named `br1`, since it already exists;
 - add an interface named `eth1` to the `$MYSQL` container;
 - assign IP address 192.168.1.2 to this interface,
 - connect said interface to `br1`.
 
 Now, both containers can ping each other on the 192.168.1.0/24 subnet.
+
+
+## Docker integration
+
+Pipework can resolve Docker containers names. If the container ID that
+you gave to Pipework cannot be found, Pipework will try to resolve it
+with `docker inspect`. This makes it even simpler to use:
+
+    docker run -name web1 -d apache
+    pipework br1 web1 192.168.12.23/24
 
 
 ## Peeking inside the private network
@@ -185,6 +205,7 @@ If you want to attach a container to the Open vSwitch bridge, no problem.
     ovs-vsctl list-br
     ovsbr0
     pipework ovsbr0 $(docker run -d mysql /usr/sbin/mysqld_safe) 192.168.1.2/24
+
     
 ## Cleanup
 
