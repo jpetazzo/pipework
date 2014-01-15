@@ -177,3 +177,4 @@ else
 	ip netns exec $NSPID ip route replace default via $GATEWAY
     }
 fi
+exit 0
