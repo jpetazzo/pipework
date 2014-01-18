@@ -190,6 +190,7 @@ else
     ip netns exec $NSPID ip link set $CONTAINER_IFNAME up
     [ "$GATEWAY" ] && {
 	ip netns exec $NSPID ip route replace default via $GATEWAY
+	ip netns exec $NSPID ip route add 224.0.0.0/4 dev eth1
     }
 fi
 
