@@ -15,9 +15,8 @@ else
   CONTAINER_IFNAME=eth1
 fi
 GUESTNAME=$2
-IPADDR=$(echo $3|cut -d@ -f1)
-GATEWAY=$(echo $3 | grep @ | cut -d@ -f2)
-MACADDR=$(echo $@ | grep '..:..:..:..:..:..' | awk '{print $NF}' )
+IPADDR=$3
+MACADDR=$4
 
 [ "$WAIT" ] && {
   while ! grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null
