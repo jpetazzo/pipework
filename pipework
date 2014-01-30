@@ -1,22 +1,52 @@
 #!/bin/bash
 set -e
 
-case "$1" in
-    --wait)
-      WAIT=1
-      ;;
-esac
+CONTAINER_IFNAME=eth1
+while (( $# )); do
+    case "$1" in
+        --verbose|-v)
+            VERB=1
+            ;;
+        --wait|-w)
+            WAIT=1
+            ;;
+        --route|-r)
+            # Collect each route in another ${ROUTE[x]} entry
+            shift
+            ROUTE[${#ROUTE[*]}]=$1
+            ;;
+        --interface|-i)
+            shift
+            CONTAINER_IFNAME=$1
+            (( VERB )) && echo "Guest i'face: $CONTAINER_IFNAME"
+            ;;
+        --*|-*) # unrecognized, eg. --help, -?
+            HELP=1
+            echo "Invalid option: $1"
+            ;;
+        *)
+            if   [ -z "$IFNAME" ]; then
+                IFNAME=$1
+                (( VERB )) && echo "Host  i'face: $IFNAME"
+            elif [ -z "$GUESTNAME" ]; then
+                GUESTNAME=$1
+                (( VERB )) && echo "Guest name:   $GUESTNAME"
+            elif [ -z "$IPADDR" ]; then
+                IPADDR=$1
+                (( VERB )) && echo "IP  address:  $IPADDR"
+            elif [ -z "$MACADDR" ]; then
+                MACADDR=$1
+                (( VERB )) && echo "MAC address:  $MACADDR"
+            else
+                HELP=1
+                echo "Invalid argument: $1"
+            fi
+            ;;
+    esac
+    shift
+done
 
-IFNAME=$1
-if [ "$2" == "-i" ]; then
-  CONTAINER_IFNAME=$3
-  shift 2
-else
-  CONTAINER_IFNAME=eth1
-fi
-GUESTNAME=$2
-IPADDR=$3
-MACADDR=$4
+[ "$IPADDR" ] || HELP=1
 
 [ "$WAIT" ] && {
   while ! grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null
@@ -25,11 +55,18 @@ MACADDR=$4
   exit 0
 }
 
-[ "$IPADDR" ] || {
+[ "$HELP" ] && {
     echo "Syntax:"
-    echo "pipework <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr]"
-    echo "pipework <hostinterface> [-i containerinterface] <guest> dhcp [macaddr]"
-    echo "pipework --wait"
+    echo "pipework <hostinterface> <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr]"
+    echo "pipework <hostinterface> <guest> dhcp [macaddr]"
+    echo "pipework -w|--wait         (await interface appearance, within container)"
+    echo "  The following options are available in any of the above commands:"
+    echo "    -i|--interface <containerinterface> ..."
+    echo "    -v|--verbose ...       (log activity)"
+    echo "    -h|--help              (print this help and exit)"
+    echo "  Any number of additional routes using the new interface may be specified:"
+    echo "    -r|--route <network>   (route <network> via dev ${CONTAINER_IFNAME})"
+    echo "  eg.  --route 224.0.0.0/4 (route multicast via ${CONTAINER_IFNAME})"
     exit 1
 }
 
@@ -44,7 +81,8 @@ then
     then 
         IFTYPE=bridge
         BRTYPE=openvswitch
-    else IFTYPE=phys
+    else
+        IFTYPE=phys
     fi
 else
     case "$IFNAME" in
@@ -112,8 +150,7 @@ case "$N" in
 	;;
 esac
 
-if [ "$IPADDR" = "dhcp" ]
-then
+if [ "$IPADDR" = "dhcp" ]; then
     # We use udhcpc to obtain the DHCP lease, make sure it's installed.
     which udhcpc >/dev/null || {
 	echo "You asked for DHCP; please install udhcpc first."
@@ -137,10 +174,10 @@ else
 fi
 
 NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/tasks)
-[ "$NSPID" ] || {
+if [ -z "$NSPID" ]; then
     echo "Could not find a process inside container $GUESTNAME."
     exit 1
-}
+fi
 
 mkdir -p /var/run/netns
 rm -f /var/run/netns/$NSPID
@@ -148,13 +185,13 @@ ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID
 
 
 # Check if we need to create a bridge.
-[ $IFTYPE = bridge ] && [ ! -d /sys/class/net/$IFNAME ] && {
+if [ "$IFTYPE" = "bridge" ] && [ ! -d /sys/class/net/$IFNAME ]; then
     (ip link set $IFNAME type bridge > /dev/null 2>&1) || (brctl addbr $IFNAME)
     ip link set $IFNAME up
-}
+fi
 
 # If it's a bridge, we need to create a veth pair
-[ $IFTYPE = bridge ] && {
+if [ "$IFTYPE" = "bridge" ]; then
     LOCAL_IFNAME=pl$NSPID$CONTAINER_IFNAME
     GUEST_IFNAME=pg$NSPID$CONTAINER_IFNAME
     ip link add name $LOCAL_IFNAME type veth peer name $GUEST_IFNAME
@@ -167,31 +204,42 @@ ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID
             ;;
     esac
     ip link set $LOCAL_IFNAME up
-}
+fi
 
 # If it's a physical interface, create a macvlan subinterface
-[ $IFTYPE = phys ] && {
+if [ "$IFTYPE" = "phys" ]; then
     GUEST_IFNAME=ph$NSPID$CONTAINER_IFNAME
     ip link add link $IFNAME dev $GUEST_IFNAME type macvlan mode bridge
     ip link set $IFNAME up
-}
+fi
 
 ip link set $GUEST_IFNAME netns $NSPID
 ip netns exec $NSPID ip link set $GUEST_IFNAME name $CONTAINER_IFNAME
 [ "$MACADDR" ] && ip netns exec $NSPID ip link set $CONTAINER_IFNAME address $MACADDR
-if [ "$IPADDR" = "dhcp" ]
-then
+if [ "$IPADDR" = "dhcp" ]; then
+    (( VERB )) && echo "Bringing up dev $CONTAINER_IFNAME using DHCP"
     ip netns exec $NSPID udhcpc -qi $CONTAINER_IFNAME
 else
+    (( VERB )) && echo "Bringing up dev $CONTAINER_IFNAME manually w/ IP address $IPADDR"
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
     [ "$GATEWAY" ] && {
 	ip netns exec $NSPID ip route delete default >/dev/null 2>&1 && true
     }
     ip netns exec $NSPID ip link set $CONTAINER_IFNAME up
-    [ "$GATEWAY" ] && {
-	ip netns exec $NSPID ip route replace default via $GATEWAY
-	ip netns exec $NSPID ip route add 224.0.0.0/4 dev eth1
-    }
+fi
+
+# If any routes were specified for the new container interface (eg. --route
+# 224.0.0.0/4), establish them.  We must do this before any default route
+# via a gateway, in case it is over one of these new routes.
+for network in ${ROUTE[*]}; do
+    (( VERB )) && echo "Adding route for $network over dev $CONTAINER_IFNAME"
+    ip netns exec $NSPID ip route add $network dev $CONTAINER_IFNAME
+done
+
+# Finally, set up any default route via a gateway
+if [ "$GATEWAY" ]; then
+    (( VERB )) && echo "Setting default route via gateway $GATEWAY"
+    ip netns exec $NSPID ip route replace default via $GATEWAY
 fi
 
 # Give our ARP neighbors a nudge about the new interface
