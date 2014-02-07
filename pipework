@@ -183,6 +183,9 @@ then
     ip netns exec $NSPID udhcpc -qi $CONTAINER_IFNAME
 else
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
+    [ "$GATEWAY" ] && {
+	ip netns exec $NSPID ip route delete default >/dev/null 2>&1 && true
+    }
     ip netns exec $NSPID ip link set $CONTAINER_IFNAME up
     [ "$GATEWAY" ] && {
 	ip netns exec $NSPID ip route replace default via $GATEWAY
