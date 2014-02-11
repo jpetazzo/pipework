@@ -50,6 +50,7 @@ else
     case "$IFNAME" in
 	br*)
 	    IFTYPE=bridge
+	    BRTYPE=linux
 	    ;;
 	*)
 	    echo "I do not know how to setup interface $IFNAME."
