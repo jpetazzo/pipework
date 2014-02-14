@@ -11,6 +11,8 @@ IFNAME=$1
 if [ "$2" == "-i" ]; then
   CONTAINER_IFNAME=$3
   shift 2
+elif [ "$WAIT" ] && [ ! -z $2 ]; then
+  CONTAINER_IFNAME=$2
 else
   CONTAINER_IFNAME=eth1
 fi
