@@ -193,4 +193,12 @@ else
     }
 fi
 
+# Give our ARP neighbors a nudge about the new interface
+if which arping > /dev/null 2>&1
+then
+    IPADDR=$(echo $IPADDR | cut -d/ -f1) 
+    ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR > /dev/null 2>&1
+else
+    echo "Warning: arping not found; interface may not be immediately recheable"
+fi
 exit 0
