@@ -138,8 +138,13 @@ fi
 
 NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/tasks)
 [ "$NSPID" ] || {
-    echo "Could not find a process inside container $GUESTNAME."
-    exit 1
+    # Check to see if container is using docker native exec driver
+    CGROUPMNT="/var/lib/docker/execdriver/native"
+    NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/pid)
+    [ "$NSPID" ] || {
+      echo "Could not find a process inside container $GUESTNAME."
+      exit 1
+    }
 }
 
 mkdir -p /var/run/netns
