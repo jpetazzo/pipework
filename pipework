@@ -79,25 +79,11 @@ case "$N" in
 	# If we didn't find anything, try to lookup the container with Docker.
 	if which docker >/dev/null
 	then
-	    DOCKERID=$(docker inspect --format='{{.ID}}' $GUESTNAME)
-	    [ "$DOCKERID" = "<no value>" ] && {
-		echo "Container $GUESTNAME not found, and unknown to Docker."
-		exit 1
-	    }
-	    NN=$(find "$CGROUPMNT" -name "$DOCKERID" | wc -l)
-	    case "$NN" in
-		0)
-		    echo "Container $GUESTNAME doesn't seem to be running."
-		    exit 1
-		    ;;
-		1)
-		    GUESTNAME=$DOCKERID
-		    ;;
-		*)
-		    echo "Multiple cgroup entries for container $GUESTNAME."
-		    exit 1
-		    ;;
-	    esac
+      	    DOCKERPID=$(docker inspect --format='{{ .State.Pid }}' $GUESTNAME)
+            [ "$DOCKERPID" = "<no value>" ] && {
+      		echo "Container $GUESTNAME not found, and unknown to Docker."
+    		exit 1
+      	    }
 	else
 	    echo "Container $GUESTNAME not found, and Docker not installed."
 	    exit 1
@@ -136,16 +122,15 @@ else
     fi
 fi
 
-NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/tasks)
-[ "$NSPID" ] || {
-    # Check to see if container is using docker native exec driver
-    CGROUPMNT="/var/lib/docker/execdriver/native"
-    NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/pid)
-    [ "$NSPID" ] || {
+if [ $DOCKERPID ]; then
+  NSPID=$DOCKERPID
+else
+  NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/tasks)
+  [ "$NSPID" ] || {
       echo "Could not find a process inside container $GUESTNAME."
       exit 1
-    }
-}
+  }
+fi
 
 mkdir -p /var/run/netns
 rm -f /var/run/netns/$NSPID
