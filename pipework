@@ -79,7 +79,7 @@ case "$N" in
 	# If we didn't find anything, try to lookup the container with Docker.
 	if which docker >/dev/null
 	then
-	    DOCKERID=$(docker inspect -format='{{.ID}}' $GUESTNAME)
+	    DOCKERID=$(docker inspect --format='{{.ID}}' $GUESTNAME)
 	    [ "$DOCKERID" = "<no value>" ] && {
 		echo "Container $GUESTNAME not found, and unknown to Docker."
 		exit 1
