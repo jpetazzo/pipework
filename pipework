@@ -22,8 +22,8 @@ Usage : $(basename $0) -n <interface_list> [-m macaddress] [-R <routes.cfg file>
           -R r.cfg : file including all the routes needed inside the container (default: /etc/docker/routes.cfg)
            exemples :
                       $(basename $0) -n eth0:dhcp:eth2 -D \$(docker run -d myimage)
-                      $(basename $0) -n "eth2.11:192.168.0.1/24:eth0 eth2.12:10.0.0.1/24@10.0.0.254:eth1" -D $(docker run -d myimage)
-                      $(basename $0) -n eth0.11:192.168.0.1/24@192.168.0.254 -R /etc/docker/foo_routes.cfg -D $(docker run -d foo_img)
+                      $(basename $0) -n "eth2.11:192.168.0.1/24:eth0 eth2.12:10.0.0.1/24@10.0.0.254:eth1" -D \$(docker run -d myimage)
+                      $(basename $0) -n eth0.11:192.168.0.1/24@192.168.0.254 -R /etc/docker/foo_routes.cfg -D \$(docker run -d foo_img)
                       $(basename $0) -n "eth2.11:192.168.0.1/24:eth0 eth2.12:10.0.0.1/24@10.0.0.254:eth1" -R /etc/docker/foo_routes.cfg \
                                       -D \$(docker run -c=100 -m=4g -v /data/:/mnt -name=bar -h bar -d foo_img)
 
