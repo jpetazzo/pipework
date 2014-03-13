@@ -36,37 +36,50 @@ Usage : $(basename $0) -n <interface_list> [-m macaddress] [-R <routes.cfg file>
 EOF
 }
 
-case "$1" in
-    --wait)
-      WAIT=1
-      ;;
-esac
+while getopts wan:R:D:h opt ; do
+	case $opt in
+		h)
+			usage
+			exit 0;
+			;;
 
-IFNAME=$1
-if [ "$2" == "-i" ]; then
-  CONTAINER_IFNAME=$3
-  shift 2
-else
-  CONTAINER_IFNAME=eth1
-fi
-GUESTNAME=$2
-IPADDR=$3
-MACADDR=$4
+		m)
+			MACADDR=$OPTARG
+			;;
 
-[ "$WAIT" ] && {
-  while ! grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null
-  do sleep 1
-  done
-  exit 0
-}
+		n)
+			NETCONF=$OPTARG
+			;;
 
-[ "$IPADDR" ] || {
-    echo "Syntax:"
-    echo "pipework <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr]"
-    echo "pipework <hostinterface> [-i containerinterface] <guest> dhcp [macaddr]"
-    echo "pipework --wait"
+		R)
+			routefile=$OPTARG
+			;;
+
+		D)
+			GUESTNAME=$OPTARG
+			;;
+		w)
+			WAIT=1
+			;;
+		? )
+			usage
+			echo "$err : Unknown option"
+			exit 1;
+			;;
+	esac
+done
+
+if [ -z "${NETCONF}" ]; then
+    usage
+    echo "${err} : At least one interface must be defined"
     exit 1
-}
+fi
+
+if [ -z "${GUESTNAME}" ]; then
+    usage
+    echo "${err} : Couldn't get container id. Please check the docker command (-D)"
+    exit 1
+fi
 
 # Second step: find the guest (for now, we only support LXC containers)
 while read dev mnt fstype options dump fsck
@@ -105,6 +118,22 @@ case "$N" in
 		exit 1
 		;;
 esac
+
+n=1
+CURRENTIF=$(ifconfig -a | sed 's/[ \t].*//;/^\(lo\|\)$/d')
+
+for int in ${NETCONF}; do
+    IFNAME=$(echo ${int} | awk -F':' '{print $1}')
+    VLANID=$(echo ${IFNAME} | awk -F'.' '{print $2}')
+    IPADDR=$(echo ${int} | awk -F':' '{print $2}')
+	CONTAINER_IFNAME=$(echo ${int} | awk -F':' '{print $3}')
+
+[ -n "$WAIT" ] && {
+  while ! grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null
+  do sleep 1
+  done
+  exit 0
+}
 
 # First step: determine type of first argument (bridge, physical interface...)
 if [ -d /sys/class/net/$IFNAME ]
@@ -229,4 +258,6 @@ then
 else
     echo "${warn} : arping not found; interface may not be immediately reachable"
 fi
+    n=$((n + 1))
+done
 exit 0
