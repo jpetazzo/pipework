@@ -160,6 +160,25 @@ else
 	    ;;
     esac
 fi
+
+    # Create vlan interface if it doesn't exist
+    if ! [ -z ${VLANID} ] && ! $(echo ${CURRENTIF} | grep -q ${IFNAME}); then
+        vconfig add ${IFNAME%.*} ${VLANID}
+        ip link set ${IFNAME%.*} up
+        ip link set ${IFNAME} up
+        sleep 0.5
+        while ! grep -q ^1$ /sys/class/net/${IFNAME}/carrier 2>/dev/null; do
+            sleep 1
+        done
+    fi  
+    
+    CURRENTIF=$(ifconfig -a | sed 's/[ \t].*//;/^\(lo\|\)$/d')
+
+    if ! $(echo ${CURRENTIF} | grep -q ${IFNAME}) && ! [[ "${IFNAME}" == br* ]]; then
+        echo "${err} : Interface ${IFNAME} does not exist"
+        exit 1
+    fi
+
 if [ "$IPADDR" = "dhcp" ]
 then
     # We use udhcpc to obtain the DHCP lease, make sure it's installed.
