@@ -32,41 +32,41 @@ Usage : $(basename $0) -n <interface_list> [-m macaddress] [-R <routes.cfg file>
                                                                    * Custom routes (-R)
                                                                    * the docker name and hostname are explicitly defined
                                                                    * A volume on the host is mounted on the container
-                       Route file syntaxe : route: <destination/netmask>	<gateway>
+                       Route file syntaxe : route: <destination/netmask>    <gateway>
 EOF
 }
 
 while getopts wn:R:D:h opt ; do
-	case $opt in
-		h)
-			usage
-			exit 0;
-			;;
+    case $opt in
+        h)
+            usage
+            exit 0;
+            ;;
 
-		m)
-			MACADDR=$OPTARG
-			;;
+        m)
+            MACADDR=$OPTARG
+            ;;
 
-		n)
-			NETCONF=$OPTARG
-			;;
+        n)
+            NETCONF=$OPTARG
+            ;;
 
-		R)
-			ROUTEFILE=$OPTARG
-			;;
+        R)
+            ROUTEFILE=$OPTARG
+            ;;
 
-		D)
-			GUESTNAME=$OPTARG
-			;;
-		w)
-			WAIT=1
-			;;
-		? )
-			usage
-			echo "$err : Unknown option"
-			exit 1;
-			;;
-	esac
+        D)
+            GUESTNAME=$OPTARG
+            ;;
+        w)
+            WAIT=1
+            ;;
+        ? )
+            usage
+            echo "$err : Unknown option"
+            exit 1;
+            ;;
+    esac
 done
 
 if [ -z "${NETCONF}" ]; then
@@ -97,26 +97,27 @@ done < /proc/mounts
 # Try to find a cgroup matching exactly the provided name.
 N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
 case "$N" in
-	0)
-		# If we didn't find anything, try to lookup the container with Docker.
-		if which docker >/dev/null
-		then
-			DOCKERPID=$(docker inspect --format='{{ .State.Pid }}' $GUESTNAME)
-			[ "$DOCKERPID" = "<no value>" ] && {
-			echo "Container $GUESTNAME not found, and unknown to Docker."
-			exit 1 }
-		else
-			echo "Container $GUESTNAME not found, and Docker not installed."
-			exit 1
-		fi
-		;;
-	1)
-		true
-		;;
-	*)
-		echo "Found more than one container matching $GUESTNAME."
-		exit 1
-		;;
+    0)
+        # If we didn't find anything, try to lookup the container with Docker.
+        if which docker >/dev/null
+        then
+            DOCKERPID=$(docker inspect --format='{{ .State.Pid }}' $GUESTNAME)
+            [ "$DOCKERPID" = "<no value>" ] && {
+            echo "Container $GUESTNAME not found, and unknown to Docker."
+            exit 1 
+            }
+        else
+            echo "Container $GUESTNAME not found, and Docker not installed."
+            exit 1
+        fi
+        ;;
+    1)
+        true
+        ;;
+    *)
+        echo "Found more than one container matching $GUESTNAME."
+        exit 1
+        ;;
 esac
 
 n=1
@@ -125,12 +126,12 @@ CURRENTIF=$(ifconfig -a | sed 's/[ \t].*//;/^\(lo\|\)$/d')
 for int in ${NETCONF}; do
     IFNAME=$(echo ${int} | awk -F':' '{print $1}')
     VLANID=$(echo ${IFNAME} | awk -F'.' '{print $2}')
-	IPADDR=$(echo ${int} | awk -F':' '{print $2}')
-	CONTAINER_IFNAME=$(echo ${int} | awk -F':' '{print $3}')
+    IPADDR=$(echo ${int} | awk -F':' '{print $2}')
+    CONTAINER_IFNAME=$(echo ${int} | awk -F':' '{print $3}')
 
-	if [ -z ${CONTAINER_IFNAME} ]; then
-		CONTAINER_IFNAME=eth${n}
-	fi
+    if [ -z ${CONTAINER_IFNAME} ]; then
+        CONTAINER_IFNAME=eth${n}
+    fi
 
 [ -n "$WAIT" ] && {
   while ! grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null
@@ -154,14 +155,14 @@ then
     fi
 else
     case "$IFNAME" in
-	br*)
-	    IFTYPE=bridge
-	    BRTYPE=linux
-	    ;;
-	*)
-	    echo "I do not know how to setup interface $IFNAME."
-	    exit 1
-	    ;;
+    br*)
+        IFTYPE=bridge
+        BRTYPE=linux
+        ;;
+    *)
+        echo "I do not know how to setup interface $IFNAME."
+        exit 1
+        ;;
     esac
 fi
 
@@ -187,15 +188,15 @@ if [ "$IPADDR" = "dhcp" ]
 then
     # We use udhcpc to obtain the DHCP lease, make sure it's installed.
     which udhcpc >/dev/null || {
-	echo "You asked for DHCP; please install udhcpc first."
-	exit 1
+    echo "You asked for DHCP; please install udhcpc first."
+    exit 1
     }
 else
     # Check if a subnet mask was provided.
     echo $IPADDR | grep -q / || {
-	echo "The IP address should include a netmask."
-	echo "Maybe you meant $IPADDR/24 ?"
-	exit 1
+    echo "The IP address should include a netmask."
+    echo "Maybe you meant $IPADDR/24 ?"
+    exit 1
     }
     # Check if a gateway address was provided.
     if echo $IPADDR | grep -q @
@@ -208,14 +209,14 @@ else
 fi
 
 if [ $DOCKERPID ]; then
-	NSPID=$DOCKERPID
+    NSPID=$DOCKERPID
 else
-	NSPID=$(sed -n ${n}p $(find "$CGROUPMNT" -name "${GUESTNAME}" | head -n 1)/tasks)
-	[ "$NSPID" ] || {
-	echo "Could not find a process inside container ${GUESTNAME}."
-	exit 1
+    NSPID=$(sed -n ${n}p $(find "$CGROUPMNT" -name "${GUESTNAME}" | head -n 1)/tasks)
+    [ "$NSPID" ] || {
+    echo "Could not find a process inside container ${GUESTNAME}."
+    exit 1
 }
-	fi
+    fi
 
 mkdir -p /var/run/netns
 rm -f /var/run/netns/$NSPID
@@ -265,11 +266,11 @@ then
 else
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
     [ "$GATEWAY" ] && {
-	ip netns exec $NSPID ip route delete default >/dev/null 2>&1 && true
+    ip netns exec $NSPID ip route delete default >/dev/null 2>&1 && true
     }
     ip netns exec $NSPID ip link set $CONTAINER_IFNAME up
     [ "$GATEWAY" ] && {
-	ip netns exec $NSPID ip route replace default via $GATEWAY
+    ip netns exec $NSPID ip route replace default via $GATEWAY
     }
 fi
 
@@ -285,17 +286,17 @@ fi
 done
 
 if [ -z "$ROUTEFILE" ] && [ -r /etc/docker/routes.cfg ]; then
-	routefile="/etc/docker/routes.cfg"
+    routefile="/etc/docker/routes.cfg"
 fi
 
 if ! [[ -z "${routefile}" ]]; then
-	cat ${routefile} | egrep "^route:" | (
-	while read line; do
-		dst=$(echo ${line} | awk '{print $2}')
-		gw=$(echo ${line} | awk '{print $3}')
-		ip netns exec $NSPID ip route add ${dst} via ${gw}
-	done
-	)
+    cat ${routefile} | egrep "^route:" | (
+    while read line; do
+        dst=$(echo ${line} | awk '{print $2}')
+        gw=$(echo ${line} | awk '{print $3}')
+        ip netns exec $NSPID ip route add ${dst} via ${gw}
+    done
+    )
 fi
 
 echo -ne "${info} : Container ${GUESTNAME} is "
