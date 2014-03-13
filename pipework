@@ -293,4 +293,11 @@ if ! [[ -z "${routefile}" ]]; then
 	done
 	)
 fi
+
+echo -ne "${info} : Container ${GUESTNAME} is "
+if $(docker ps -q --no-trunc | grep -q ${GUESTNAME}); then
+    echo "started"
+else
+    echo "stopped"
+fi
 exit 0
