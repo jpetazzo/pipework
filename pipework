@@ -1,4 +1,6 @@
 #!/bin/bash
+
+# Exit immediately, if any command fails without being captured by an if ...; then
 set -e
 
 CONTAINER_IFNAME=eth1
@@ -47,6 +49,7 @@ while (( $# )); do
     shift
 done
 
+# Validate args, ensuring that at least an IPADDR was provided
 [ "$WAIT" ] && {
   while ! grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null
   do sleep 1
@@ -70,6 +73,29 @@ done
     exit 1
 }
 
+if [ "$IPADDR" = "dhcp" ]; then
+    # We use udhcpc to obtain the DHCP lease, make sure it's installed.
+    which udhcpc >/dev/null || {
+        echo "You asked for DHCP; please install udhcpc first."
+        exit 1
+    }
+else
+    # Check if a subnet mask was provided.
+    echo $IPADDR | grep -q / || {
+        echo "The IP address should include a netmask."
+        echo "Maybe you meant $IPADDR/24 ?"
+        exit 1
+    }
+    # Check if a gateway address was provided.
+    if echo $IPADDR | grep -q @
+    then
+        GATEWAY=$(echo $IPADDR | cut -d@ -f2)
+        IPADDR=$(echo $IPADDR | cut -d@ -f1)
+    else
+        GATEWAY=
+    fi
+fi
+
 # First step: determine type of first argument (bridge, physical interface...)
 if [ -d /sys/class/net/$IFNAME ]
 then
@@ -86,99 +112,55 @@ then
     fi
 else
     case "$IFNAME" in
-	br*)
-	    IFTYPE=bridge
-	    BRTYPE=linux
-	    ;;
-	*)
-	    echo "I do not know how to setup interface $IFNAME."
-	    exit 1
-	    ;;
+        br*)
+            IFTYPE=bridge
+            BRTYPE=linux
+            ;;
+        *)
+            echo "I do not know how to setup interface $IFNAME."
+            exit 1
+            ;;
     esac
 fi
 
-# Second step: find the guest (for now, we only support LXC containers)
+# Second step: find the guest (for now, we only support LXC containers).  Try to find a cgroup
+# matching exactly the provided name.  Use cgroup mount or docker to find a process within the
+# container, remember it in NSPID, and prepare to adjust its container's networking.
 while read dev mnt fstype options dump fsck
 do
     [ "$fstype" != "cgroup" ] && continue
     echo $options | grep -qw devices || continue
     CGROUPMNT=$mnt
+    (( VERB )) && echo "Found cgroup devices mount point: ${CGROUPMNT}"
 done < /proc/mounts
 
-[ "$CGROUPMNT" ] || {
-    echo "Could not locate cgroup mount point."
-    exit 1
-}
-
-# Try to find a cgroup matching exactly the provided name.
-N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
-case "$N" in
-    0)
-	# If we didn't find anything, try to lookup the container with Docker.
-	if which docker >/dev/null
-	then
-	    DOCKERID=$(docker inspect --format='{{.ID}}' $GUESTNAME)
-	    [ "$DOCKERID" = "<no value>" ] && {
-		echo "Container $GUESTNAME not found, and unknown to Docker."
-		exit 1
-	    }
-	    NN=$(find "$CGROUPMNT" -name "$DOCKERID" | wc -l)
-	    case "$NN" in
-		0)
-		    echo "Container $GUESTNAME doesn't seem to be running."
-		    exit 1
-		    ;;
-		1)
-		    GUESTNAME=$DOCKERID
-		    ;;
-		*)
-		    echo "Multiple cgroup entries for container $GUESTNAME."
-		    exit 1
-		    ;;
-	    esac
-	else
-	    echo "Container $GUESTNAME not found, and Docker not installed."
-	    exit 1
-	fi
-	;;
-    1)
-	true
-	;;
-    *)
-	echo "Found more than one container matching $GUESTNAME."
-	exit 1
-	;;
-esac
-
-if [ "$IPADDR" = "dhcp" ]; then
-    # We use udhcpc to obtain the DHCP lease, make sure it's installed.
-    which udhcpc >/dev/null || {
-	echo "You asked for DHCP; please install udhcpc first."
-	exit 1
-    }
-else
-    # Check if a subnet mask was provided.
-    echo $IPADDR | grep -q / || {
-	echo "The IP address should include a netmask."
-	echo "Maybe you meant $IPADDR/24 ?"
-	exit 1
-    }
-    # Check if a gateway address was provided.
-    if echo $IPADDR | grep -q @
-    then
-        GATEWAY=$(echo $IPADDR | cut -d@ -f2)
-        IPADDR=$(echo $IPADDR | cut -d@ -f1)
-    else
-        GATEWAY=
+if [ "$CGROUPMNT" ]; then
+    # OK, try to find NSPID using the cgroup devices mount point.  
+    CGROUPPATH=$( find "$CGROUPMNT" -name "$GUESTNAME" )
+    if (( $( echo -n "${CGROUPPATH}" | wc -l ) == 1 )); then
+        NSPID=$( head -n 1 ${CGROUPPATH}/tasks || true )
+        [ -z "$NSPID" ] && (( VERB )) && echo "Could not find a process using ${CGROUPPATH}"
     fi
 fi
-
-NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/tasks)
 if [ -z "$NSPID" ]; then
-    echo "Could not find a process inside container $GUESTNAME."
+    # If we didn't find anything using cgroups, try to lookup the container with Docker.  Normally,
+    # this'll be docker, but under some systems it's named docker.io
+    DOCKER=$( which docker 2>/dev/null || which docker.io 2>/dev/null )
+    if [ "$DOCKER" ]; then
+        NSPID=$( $DOCKER inspect --format='{{ .State.Pid }}' $GUESTNAME || true )
+        if [ -z "$NSPID" ] || [ "$NSPID" = "0" ] || [ "$NSPID" = "<no value>" ]; then
+            (( VERB )) && echo "Container $GUESTNAME not found, not running, or unknown to Docker."
+            NSPID=""
+        fi
+    else
+        (( VERB )) && echo "Container $GUESTNAME not found, and Docker not installed."
+    fi
+fi
+if [ -z "$NSPID" ]; then
+    echo "Could not find a process inside container ${GUESTNAME}."
     exit 1
 fi
-(( VERB )) && echo "Found container process PID $NSPID"
+(( VERB )) && echo "Found container ${GUESTNAME} process $NSPID"
 
 if ! mkdir -p /var/run/netns \
     || ! rm -f /var/run/netns/$NSPID \
@@ -189,7 +171,7 @@ fi
 
 # Check if we need to create a bridge.
 if [ "$IFTYPE" = "bridge" ] && [ ! -d /sys/class/net/$IFNAME ]; then
-    (ip link set $IFNAME type bridge > /dev/null 2>&1) || (brctl addbr $IFNAME)
+    ip link set $IFNAME type bridge >/dev/null 2>&1 || brctl addbr $IFNAME
     ip link set $IFNAME up
 fi
 
@@ -200,7 +182,7 @@ if [ "$IFTYPE" = "bridge" ]; then
     ip link add name $LOCAL_IFNAME type veth peer name $GUEST_IFNAME
     case "$BRTYPE" in
         linux)
-            (ip link set $LOCAL_IFNAME master $IFNAME > /dev/null 2>&1) || (brctl addif $IFNAME $LOCAL_IFNAME)
+            ip link set $LOCAL_IFNAME master $IFNAME >/dev/null 2>&1 || brctl addif $IFNAME $LOCAL_IFNAME
             ;;
         openvswitch)
             ovs-vsctl add-port $IFNAME $LOCAL_IFNAME
@@ -226,7 +208,7 @@ else
     (( VERB )) && echo "Bringing up dev $CONTAINER_IFNAME manually w/ IP address $IPADDR"
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
     if [ "$GATEWAY" ]; then
-	ip netns exec $NSPID ip route delete default >/dev/null 2>&1 || true
+        ip netns exec $NSPID ip route delete default >/dev/null 2>&1 || true
     fi
     ip netns exec $NSPID ip link set $CONTAINER_IFNAME up
 fi
@@ -246,10 +228,9 @@ if [ "$GATEWAY" ]; then
 fi
 
 # Give our ARP neighbors a nudge about the new interface
-if which arping > /dev/null 2>&1
-then
+if which arping >/dev/null 2>&1; then
     IPADDR=$(echo $IPADDR | cut -d/ -f1) 
-    ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR > /dev/null 2>&1
+    ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR >/dev/null 2>&1
 else
     echo "Warning: arping not found; interface may not be immediately reachable"
 fi
