@@ -278,7 +278,9 @@ fi
 if which arping > /dev/null 2>&1
 then
     IPADDR=$(echo $IPADDR | cut -d/ -f1) 
+    set +e
     ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR > /dev/null 2>&1
+    set -e
 else
     echo "${warn} : arping not found; interface may not be immediately reachable"
 fi
