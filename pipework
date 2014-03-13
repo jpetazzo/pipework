@@ -68,32 +68,6 @@ MACADDR=$4
     exit 1
 }
 
-# First step: determine type of first argument (bridge, physical interface...)
-if [ -d /sys/class/net/$IFNAME ]
-then
-    if [ -d /sys/class/net/$IFNAME/bridge ]
-    then 
-        IFTYPE=bridge
-        BRTYPE=linux
-    elif $(which ovs-vsctl >/dev/null) && $(ovs-vsctl list-br|grep -q ^$IFNAME$)
-    then 
-        IFTYPE=bridge
-        BRTYPE=openvswitch
-    else IFTYPE=phys
-    fi
-else
-    case "$IFNAME" in
-	br*)
-	    IFTYPE=bridge
-	    BRTYPE=linux
-	    ;;
-	*)
-	    echo "I do not know how to setup interface $IFNAME."
-	    exit 1
-	    ;;
-    esac
-fi
-
 # Second step: find the guest (for now, we only support LXC containers)
 while read dev mnt fstype options dump fsck
 do
@@ -132,6 +106,31 @@ case "$N" in
 		;;
 esac
 
+# First step: determine type of first argument (bridge, physical interface...)
+if [ -d /sys/class/net/$IFNAME ]
+then
+    if [ -d /sys/class/net/$IFNAME/bridge ]
+    then
+        IFTYPE=bridge
+        BRTYPE=linux
+    elif $(which ovs-vsctl >/dev/null) && $(ovs-vsctl list-br|grep -q ^$IFNAME$)
+    then
+        IFTYPE=bridge
+        BRTYPE=openvswitch
+    else IFTYPE=phys
+    fi
+else
+    case "$IFNAME" in
+	br*)
+	    IFTYPE=bridge
+	    BRTYPE=linux
+	    ;;
+	*)
+	    echo "I do not know how to setup interface $IFNAME."
+	    exit 1
+	    ;;
+    esac
+fi
 if [ "$IPADDR" = "dhcp" ]
 then
     # We use udhcpc to obtain the DHCP lease, make sure it's installed.
