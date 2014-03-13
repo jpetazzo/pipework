@@ -1,6 +1,41 @@
 #!/bin/bash
 set -e
 
+# Text color variables
+txtbld=$(tput bold)             # Bold
+bldred=${txtbld}$(tput setaf 1) #  red
+bldgre=${txtbld}$(tput setaf 2) #  green
+bldylw=${txtbld}$(tput setaf 3) #  yellow
+txtrst=$(tput sgr0)             # Reset
+err=${bldred}ERROR${txtrst}
+info=${bldgre}INFO${txtrst}
+warn=${bldylw}WARNING${txtrst}
+
+usage()
+{
+    cat << EOF
+
+Usage : $(basename $0) -n <interface_list> [-m macaddress] [-R <routes.cfg file>] -D \$(docker run ...)
+          -h       : Print the current message
+          -m       : macaddress
+          -n       : Network configuration. Must be in the form ${txtbld}ifname:ip_addr/netmask@gateway:container_ifname${txtrst}
+          -R r.cfg : file including all the routes needed inside the container (default: /etc/docker/routes.cfg)
+           exemples :
+                      $(basename $0) -n eth0:dhcp:eth2 -D \$(docker run -d myimage)
+                      $(basename $0) -n "eth2.11:192.168.0.1/24:eth0 eth2.12:10.0.0.1/24@10.0.0.254:eth1" -D $(docker run -d myimage)
+                      $(basename $0) -n eth0.11:192.168.0.1/24@192.168.0.254 -R /etc/docker/foo_routes.cfg -D $(docker run -d foo_img)
+                      $(basename $0) -n "eth2.11:192.168.0.1/24:eth0 eth2.12:10.0.0.1/24@10.0.0.254:eth1" -R /etc/docker/foo_routes.cfg \
+                                      -D \$(docker run -c=100 -m=4g -v /data/:/mnt -name=bar -h bar -d foo_img)
+
+                       The latter exemple is a bit more detailed : * ressource limits (cpu.shares=100, memory=64g)
+                                                                   * 2 network configurations (-n)
+                                                                   * Custom routes (-R)
+                                                                   * the docker name and hostname are explicitly defined
+                                                                   * A volume on the host is mounted on the container
+                       Route file syntaxe : route: <destination/netmask>	<gateway>
+EOF
+}
+
 case "$1" in
     --wait)
       WAIT=1
