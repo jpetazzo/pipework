@@ -36,7 +36,7 @@ Usage : $(basename $0) -n <interface_list> [-m macaddress] [-R <routes.cfg file>
 EOF
 }
 
-while getopts wan:R:D:h opt ; do
+while getopts wn:R:D:h opt ; do
 	case $opt in
 		h)
 			usage
