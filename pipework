@@ -52,7 +52,7 @@ while getopts wan:R:D:h opt ; do
 			;;
 
 		R)
-			routefile=$OPTARG
+			ROUTEFILE=$OPTARG
 			;;
 
 		D)
@@ -279,4 +279,18 @@ else
 fi
     n=$((n + 1))
 done
+
+if [ -z "$ROUTEFILE" ] && [ -r /etc/docker/routes.cfg ]; then
+	routefile="/etc/docker/routes.cfg"
+fi
+
+if ! [[ -z "${routefile}" ]]; then
+	cat ${routefile} | egrep "^route:" | (
+	while read line; do
+		dst=$(echo ${line} | awk '{print $2}')
+		gw=$(echo ${line} | awk '{print $3}')
+		ip netns exec $NSPID ip route add ${dst} via ${gw}
+	done
+	)
+fi
 exit 0
