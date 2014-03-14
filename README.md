@@ -8,8 +8,14 @@ Open the settings panel for the VM, go the the "Network" tab, pull down the
 name is something like "PCnet-FAST III"), instead of the default `e1000`
 (Intel PRO/1000). Also, "Promiscuous Mode" should be set to "Allow All".
 If you don't do that, bridged containers won't work, because the virtual
-NIC will filter out all packets with a different MAC address.
+NIC will filter out all packets with a different MAC address.  If you are
+running VirtualBox in headless mode, the command line equivalent of the above
+is `modifyvm --nicpromisc1 allow-all`.  If you are using Vagrant, you can add
+the following to the config for the same effect:
 
+    config.vm.provider "virtualbox" do |v|
+      v.customize ['modifyvm', :id, '--nicpromisc1', 'allow-all']
+    end
 
 ## Docker users: read this!
 
