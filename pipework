@@ -291,8 +291,8 @@ if [ -z "$ROUTEFILE" ] && [ -r /etc/docker/routes.cfg ]; then
     routefile="/etc/docker/routes.cfg"
 fi
 
-if ! [[ -z "${routefile}" ]]; then
-    cat ${routefile} | egrep "^route:" | (
+if ! [[ -z "$ROUTEFILE" ]]; then
+    cat $ROUTEFILE | egrep "^route:" | (
     while read line; do
         dst=$(echo ${line} | awk '{print $2}')
         gw=$(echo ${line} | awk '{print $3}')
