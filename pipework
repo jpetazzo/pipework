@@ -81,7 +81,7 @@ if [ -z "$GUESTNAME" ]; then
     exit 1
 fi
 
-# Second step: find the guest (for now, we only support LXC containers)
+# find the guest (for now, we only support LXC containers)
 while read dev mnt fstype options dump fsck
 do
     [ "$fstype" != "cgroup" ] && continue
@@ -140,7 +140,7 @@ for INT in $NETCONF; do
   exit 0
 }
 
-# First step: determine type of first argument (bridge, physical interface...)
+# determine type of first argument (bridge, physical interface...)
 if [ -d /sys/class/net/$IFNAME ]
 then
     if [ -d /sys/class/net/$IFNAME/bridge ]
