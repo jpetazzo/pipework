@@ -129,6 +129,11 @@ esac
 n=1
 CURRENTIF=$(ifconfig -a | sed 's/[ \t].*//;/^\(lo\|\)$/d')
 
+if ! [ -z $VERBOSE ]; then
+    echo -e "GUESTNAME : $GUESTNAME"
+    echo -e "------------------------------ "
+fi
+
 for INT in $NETCONF; do
     IFNAME=$(echo $INT | awk -F':' '{print $1}')
     VLANID=$(echo $IFNAME | awk -F'.' '{print $2}')
@@ -181,6 +186,10 @@ fi
         while ! grep -q ^1$ /sys/class/net/$IFNAME/carrier 2>/dev/null; do
             sleep 1
         done
+    fi  
+
+    if ! [ -z $VERBOSE ]; then
+        echo -e "type: $IFTYPE\thost_interface: $IFNAME\tip_addr: $IPADDR\tcontainer_int: $CONTAINER_IFNAME\tmac_addr: $MACADDR\troute_file: $ROUTEFILE\n"
     fi  
     
     CURRENTIF=$(ifconfig -a | sed 's/[ \t].*//;/^\(lo\|\)$/d')
