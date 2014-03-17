@@ -15,47 +15,53 @@ usage()
 {
     cat << EOF
 
-Usage : $(basename $0) -n <interface_list> [-m macaddress] [-R <routes.cfg file>] -D \$(docker run ...)
+Usage : $(basename $0) [-v][-a] -i <interface_list> [-m macaddress] [-r <routes.cfg file>] -n \$(docker run ...)
+          -v       : verbose
+          -a       : Start container automatically on host reboot
           -h       : Print the current message
           -m       : macaddress
-          -n       : Network configuration. Must be in the form ${txtbld}ifname:ip_addr/netmask@gateway:container_ifname${txtrst}
-          -R r.cfg : file including all the routes needed inside the container (default: /etc/docker/routes.cfg)
+          -i       : Network configuration. Must be in the form ${txtbld}ifname:ip_addr/netmask@gateway:container_ifname${txtrst}
+          -r r.cfg : file including all the routes needed inside the container (default: /etc/docker/routes.cfg)
            exemples :
-                      $(basename $0) -n eth0:dhcp:eth2 -D \$(docker run -d myimage)
-                      $(basename $0) -n "eth2.11:192.168.0.1/24:eth0 eth2.12:10.0.0.1/24@10.0.0.254:eth1" -D \$(docker run -d myimage)
-                      $(basename $0) -n eth0.11:192.168.0.1/24@192.168.0.254 -R /etc/docker/foo_routes.cfg -D \$(docker run -d foo_img)
-                      $(basename $0) -n "eth2.11:192.168.0.1/24:eth0 eth2.12:10.0.0.1/24@10.0.0.254:eth1" -R /etc/docker/foo_routes.cfg \
-                                      -D \$(docker run -c=100 -m=4g -v /data/:/mnt -name=bar -h bar -d foo_img)
+                      $(basename $0) -i eth0:dhcp:eth2 -n \$(docker run -d myimage)
+                      $(basename $0) -i "eth2.11:192.168.0.1/24:eth0 eth2.12:10.0.0.1/24@10.0.0.254:eth1" -n \$(docker run -d myimage)
+                      $(basename $0) -i eth0.11:192.168.0.1/24@192.168.0.254 -r /etc/docker/foo_routes.cfg -n \$(docker run -d foo_img)
+                      $(basename $0) -i "eth2.11:192.168.0.1/24:eth0 eth2.12:10.0.0.1/24@10.0.0.254:eth1" -r /etc/docker/foo_routes.cfg \\
+                                      -n \$(docker run -c=100 -m=4g -v /data/:/mnt -name=bar -h bar -d foo_img)
 
-                       The latter exemple is a bit more detailed : * ressource limits (cpu.shares=100, memory=64g)
-                                                                   * 2 network configurations (-n)
-                                                                   * Custom routes (-R)
+                       The latter exemple is a bit more detailed : * ressource limits (cpu.shares=100, memory=4g)
+                                                                   * 2 network configurations (-i)
+                                                                   * Custom routes (-r)
                                                                    * the docker name and hostname are explicitly defined
                                                                    * A volume on the host is mounted on the container
                        Route file syntaxe : route: <destination/netmask>    <gateway>
 EOF
 }
 
-while getopts wn:R:D:h opt ; do
+while getopts vwi:r:n:h opt ; do
     case $opt in
         h)
             usage
             exit 0;
             ;;
 
+        v)
+            VERBOSE=1
+            ;;
+
         m)
             MACADDR=$OPTARG
             ;;
 
-        n)
+        i)
             NETCONF=$OPTARG
             ;;
 
-        R)
+        r)
             ROUTEFILE=$OPTARG
             ;;
 
-        D)
+        n)
             GUESTNAME=$OPTARG
             ;;
         w)
@@ -77,7 +83,7 @@ fi
 
 if [ -z "$GUESTNAME" ]; then
     usage
-    echo "${err} : Couldn't get container id. Please check the docker command (-D)"
+    echo "${err} : Couldn't get container id. Please check the docker command"
     exit 1
 fi
 
@@ -284,6 +290,7 @@ then
 else
     echo "${warn} : arping not found; interface may not be immediately reachable"
 fi
+
     n=$((n + 1))
 done
 
@@ -291,7 +298,7 @@ if [ -z "$ROUTEFILE" ] && [ -r /etc/docker/routes.cfg ]; then
     routefile="/etc/docker/routes.cfg"
 fi
 
-if ! [[ -z "$ROUTEFILE" ]]; then
+if ! [ -z "$ROUTEFILE" ]; then
     cat $ROUTEFILE | egrep "^route:" | (
     while read line; do
         dst=$(echo ${line} | awk '{print $2}')
@@ -301,10 +308,4 @@ if ! [[ -z "$ROUTEFILE" ]]; then
     )
 fi
 
-echo -ne "${info} : Container $GUESTNAME is "
-if $(docker ps -q --no-trunc | grep -q $GUESTNAME); then
-    echo "started"
-else
-    echo "stopped"
-fi
 exit 0
