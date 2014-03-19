@@ -225,9 +225,9 @@ if [ "$IPADDR" = "dhcp" ]; then
 else
     (( VERB )) && echo "Bringing up dev $CONTAINER_IFNAME manually w/ IP address $IPADDR"
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
-    [ "$GATEWAY" ] && {
-	ip netns exec $NSPID ip route delete default >/dev/null 2>&1 && true
-    }
+    if [ "$GATEWAY" ]; then
+	ip netns exec $NSPID ip route delete default >/dev/null 2>&1 || true
+    fi
     ip netns exec $NSPID ip link set $CONTAINER_IFNAME up
 fi
 
