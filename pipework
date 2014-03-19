@@ -3,6 +3,19 @@
 # Exit immediately, if any command fails without being captured by an if ...; then
 set -e
 
+# Logging
+PROG=$( basename $0 )
+VERB=
+log() {
+    (( VERB )) && echo "$PROG      : $*" >&2
+}
+wrn() {
+    echo "$PROG  WARN: $*" >&2
+}
+err() {
+    echo "$PROG ERROR: $*" >&2
+}
+
 CONTAINER_IFNAME=eth1
 while (( $# )); do
     case "$1" in
@@ -16,33 +29,33 @@ while (( $# )); do
             # Collect each route in another ${ROUTE[x]} entry
             shift
             ROUTE[${#ROUTE[*]}]=$1
-            (( VERB )) && echo "Route network: $1"
+            log "Route network: $1"
             ;;
         --interface|-i)
             shift
             CONTAINER_IFNAME=$1
-            (( VERB )) && echo "Guest i'face:  $CONTAINER_IFNAME"
+            log "Guest i'face:  $CONTAINER_IFNAME"
             ;;
         --*|-*) # unrecognized, eg. --help, -?
             HELP=1
-            echo "Invalid option: $1"
+            err "Invalid option: $1"
             ;;
         *)
             if   [ -z "$IFNAME" ]; then
                 IFNAME=$1
-                (( VERB )) && echo "Host  i'face:  $IFNAME"
+                log "Host i'face:   $IFNAME"
             elif [ -z "$GUESTNAME" ]; then
                 GUESTNAME=$1
-                (( VERB )) && echo "Guest name:    $GUESTNAME"
+                log "Guest name:    $GUESTNAME"
             elif [ -z "$IPADDR" ]; then
                 IPADDR=$1
-                (( VERB )) && echo "IP  address:   $IPADDR"
+                log "IP address:    $IPADDR"
             elif [ -z "$MACADDR" ]; then
                 MACADDR=$1
-                (( VERB )) && echo "MAC address:   $MACADDR"
+                log "MAC address:   $MACADDR"
             else
                 HELP=1
-                echo "Invalid argument: $1"
+                err "Invalid argument: $1"
             fi
             ;;
     esac
@@ -76,14 +89,13 @@ done
 if [ "$IPADDR" = "dhcp" ]; then
     # We use udhcpc to obtain the DHCP lease, make sure it's installed.
     which udhcpc >/dev/null || {
-        echo "You asked for DHCP; please install udhcpc first."
+        err "You asked for DHCP; please install udhcpc first."
         exit 1
     }
 else
     # Check if a subnet mask was provided.
     echo $IPADDR | grep -q / || {
-        echo "The IP address should include a netmask."
-        echo "Maybe you meant $IPADDR/24 ?"
+        err "The IP address should include a netmask; Maybe you meant $IPADDR/24 ?"
         exit 1
     }
     # Check if a gateway address was provided.
@@ -117,7 +129,7 @@ else
             BRTYPE=linux
             ;;
         *)
-            echo "I do not know how to setup interface $IFNAME."
+            err "I do not know how to setup interface $IFNAME."
             exit 1
             ;;
     esac
@@ -131,7 +143,7 @@ do
     [ "$fstype" != "cgroup" ] && continue
     echo $options | grep -qw devices || continue
     CGROUPMNT=$mnt
-    (( VERB )) && echo "Found cgroup devices mount point: ${CGROUPMNT}"
+    log "Found cgroup devices mount point: ${CGROUPMNT}"
 done < /proc/mounts
 
 if [ "$CGROUPMNT" ]; then
@@ -139,7 +151,7 @@ if [ "$CGROUPMNT" ]; then
     CGROUPPATH=$( find "$CGROUPMNT" -name "$GUESTNAME" )
     if (( $( echo -n "${CGROUPPATH}" | wc -l ) == 1 )); then
         NSPID=$( head -n 1 ${CGROUPPATH}/tasks || true )
-        [ -z "$NSPID" ] && (( VERB )) && echo "Could not find a process using ${CGROUPPATH}"
+        [ -z "$NSPID" ] && log "Could not find a process using ${CGROUPPATH}"
     fi
 fi
 if [ -z "$NSPID" ]; then
@@ -149,23 +161,23 @@ if [ -z "$NSPID" ]; then
     if [ "$DOCKER" ]; then
         NSPID=$( $DOCKER inspect --format='{{ .State.Pid }}' $GUESTNAME || true )
         if [ -z "$NSPID" ] || [ "$NSPID" = "0" ] || [ "$NSPID" = "<no value>" ]; then
-            (( VERB )) && echo "Container $GUESTNAME not found, not running, or unknown to Docker."
+            log "Container $GUESTNAME not found, not running, or unknown to Docker."
             NSPID=""
         fi
     else
-        (( VERB )) && echo "Container $GUESTNAME not found, and Docker not installed."
+        log "Container $GUESTNAME not found, and Docker not installed."
     fi
 fi
 if [ -z "$NSPID" ]; then
-    echo "Could not find a process inside container ${GUESTNAME}."
+    err "Could not find a process inside container ${GUESTNAME}."
     exit 1
 fi
-(( VERB )) && echo "Found container ${GUESTNAME} process $NSPID"
+log "Found container ${GUESTNAME} process $NSPID"
 
 if ! mkdir -p /var/run/netns \
     || ! rm -f /var/run/netns/$NSPID \
     || ! ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID; then
-    echo "Could not prepare to adjust container networking; run using sudo?"
+    err "Could not prepare to adjust container networking; run using sudo?"
     exit 1
 fi
 
@@ -202,10 +214,10 @@ ip link set $GUEST_IFNAME netns $NSPID
 ip netns exec $NSPID ip link set $GUEST_IFNAME name $CONTAINER_IFNAME
 [ "$MACADDR" ] && ip netns exec $NSPID ip link set $CONTAINER_IFNAME address $MACADDR
 if [ "$IPADDR" = "dhcp" ]; then
-    (( VERB )) && echo "Bringing up dev $CONTAINER_IFNAME using DHCP"
+    log "Bringing up dev $CONTAINER_IFNAME using DHCP"
     ip netns exec $NSPID udhcpc -qi $CONTAINER_IFNAME
 else
-    (( VERB )) && echo "Bringing up dev $CONTAINER_IFNAME manually w/ IP address $IPADDR"
+    log "Bringing up dev $CONTAINER_IFNAME manually w/ IP address $IPADDR"
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
     if [ "$GATEWAY" ]; then
         ip netns exec $NSPID ip route delete default >/dev/null 2>&1 || true
@@ -217,13 +229,13 @@ fi
 # 224.0.0.0/4), establish them.  We must do this before any default route
 # via a gateway, in case it is over one of these new routes.
 for network in ${ROUTE[*]}; do
-    (( VERB )) && echo "Adding route for $network over dev $CONTAINER_IFNAME"
+    log "Adding route for $network over dev $CONTAINER_IFNAME"
     ip netns exec $NSPID ip route add $network dev $CONTAINER_IFNAME
 done
 
 # Finally, set up any default route via a gateway
 if [ "$GATEWAY" ]; then
-    (( VERB )) && echo "Setting default route via gateway $GATEWAY"
+    log "Setting default route via gateway $GATEWAY"
     ip netns exec $NSPID ip route replace default via $GATEWAY
 fi
 
@@ -232,6 +244,6 @@ if which arping >/dev/null 2>&1; then
     IPADDR=$(echo $IPADDR | cut -d/ -f1) 
     ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR >/dev/null 2>&1
 else
-    echo "Warning: arping not found; interface may not be immediately reachable"
+    wrn "arping not found; interface may not be immediately reachable"
 fi
 exit 0
