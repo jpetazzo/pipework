@@ -7,7 +7,7 @@ set -e
 PROG=$( basename $0 )
 VERB=
 log() {
-    (( VERB )) && echo "$PROG      : $*" >&2
+    if (( VERB )); then echo "$PROG      : $*" >&2; fi
 }
 wrn() {
     echo "$PROG  WARN: $*" >&2
@@ -19,6 +19,9 @@ err() {
 CONTAINER_IFNAME=eth1
 while (( $# )); do
     case "$1" in
+        --trace|-x)
+            set -x
+            ;;
         --verbose|-v)
             VERB=1
             ;;
@@ -78,7 +81,8 @@ done
     echo "pipework -w|--wait         (await interface appearance, within container)"
     echo "  The following options are available in any of the above commands:"
     echo "    -i|--interface <containerinterface> ..."
-    echo "    -v|--verbose ...       (log activity)"
+    echo "    -v|--verbose           (log activity)"
+    echo "    -x|--trace             (trace all bash commands)"
     echo "    -h|--help              (print this help and exit)"
     echo "  Any number of additional routes using the new interface may be specified:"
     echo "    -r|--route <network>   (route <network> via dev ${CONTAINER_IFNAME})"
