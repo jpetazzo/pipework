@@ -22,6 +22,9 @@ while (( $# )); do
         --trace|-x)
             set -x
             ;;
+        --arp|-a)
+            ARP=1
+            ;;
         --verbose|-v)
             VERB=1
             ;;
@@ -84,6 +87,7 @@ done
     echo "    -v|--verbose           (log activity)"
     echo "    -x|--trace             (trace all bash commands)"
     echo "    -h|--help              (print this help and exit)"
+    echo "    -a|--arp               (send a gratuitous arp to activate the new interface)"
     echo "  Any number of additional routes using the new interface may be specified:"
     echo "    -r|--route <network>   (route <network> via dev ${CONTAINER_IFNAME})"
     echo "  eg.  --route 224.0.0.0/4 (route multicast via ${CONTAINER_IFNAME})"
@@ -243,11 +247,11 @@ if [ "$GATEWAY" ]; then
     ip netns exec $NSPID ip route replace default via $GATEWAY
 fi
 
-# Give our ARP neighbors a nudge about the new interface
-if which arping >/dev/null 2>&1; then
-    IPADDR=$(echo $IPADDR | cut -d/ -f1) 
-    ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR >/dev/null 2>&1
-else
-    wrn "arping not found; interface may not be immediately reachable"
+# Give our ARP neighbors a nudge about the new interface; ignore arping failures; since we're
+# running arping within the container, it may not exist and we cannot check.  Note: on Debian/Ubuntu
+# you want iputils-arping (Thomas Habets), not arping (Alexey Kuznetsov)!
+IPADDR=$(echo $IPADDR | cut -d/ -f1) 
+if (( ARP )) && ! ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR >/dev/null 2>&1; then
+    wrn "arping failed; interface may not be immediately reachable"
 fi
 exit 0
