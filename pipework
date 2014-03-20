@@ -304,7 +304,7 @@ for INT in $NETCONF; do
 done
 
 if [ -z "$ROUTEFILE" ] && [ -r /etc/docker/routes.cfg ]; then
-    routefile="/etc/docker/routes.cfg"
+    ROUTEFILE="/etc/docker/routes.cfg"
 fi
 
 if ! [ -z "$ROUTEFILE" ]; then
