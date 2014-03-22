@@ -72,13 +72,39 @@ done < /proc/mounts
     exit 1
 }
 
-# Try to find a cgroup matching exactly the provided name.
-N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
-case "$N" in
+# Try to determine which engine is in use. There's at least one container expected
+# to be running when the user calls this script. If that container was started
+# by lxc-start (or Docker's lxc-start-privileged) we will notice.
+#
+# Note: The set -e option at the top of the script causes this script to exit
+# prematurely if there's any error. When `grep -c` reports 0, it exits with
+# code 1, hence causing this script to terminate. Use `true` to circumvent that.
+
+N_LXC_CONTAINERS=$(ps ax | grep -c -E '[l]xc-start' || true)
+case "$N_LXC_CONTAINERS" in
     0)
-	# If we didn't find anything, try to lookup the container with Docker.
-	if which docker >/dev/null
-	then
+        # LXC engine not in use; most likely it's a libcontainer engine in use
+        ENGINE=native
+        ;;
+    *)
+        # LXC tools are being used.
+        ENGINE=lxc
+        ;;
+esac
+
+if ! which docker >/dev/null
+then
+    echo "Docker is not installed." >&2
+    exit 1
+fi
+
+case "$ENGINE" in
+    "lxc")
+    # Try to find a cgroup matching exactly the provided name.
+    N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
+    case "$N" in
+        0)
+        # If we didn't find anything, try to lookup the container with Docker.
 	    DOCKERID=$(docker inspect --format='{{.ID}}' $GUESTNAME)
 	    [ "$DOCKERID" = "<no value>" ] && {
 		echo "Container $GUESTNAME not found, and unknown to Docker."
@@ -98,18 +124,23 @@ case "$N" in
 		    exit 1
 		    ;;
 	    esac
-	else
-	    echo "Container $GUESTNAME not found, and Docker not installed."
-	    exit 1
-	fi
-	;;
-    1)
-	true
-	;;
-    *)
-	echo "Found more than one container matching $GUESTNAME."
-	exit 1
-	;;
+        ;;
+        1)
+        true
+        ;;
+        *)
+        echo "Found more than one container matching $GUESTNAME."
+        exit 1
+        ;;
+    esac
+    ;;
+    "native")
+    CONTAINERPID=$(docker inspect --format='{{ .State.Pid }}' $GUESTNAME)
+    [ "$CONTAINERPID" = "<no value>" ] && {
+        echo "Container $GUESTNAME not found, and unknown to Docker."
+        exit 1
+    }
+    ;;
 esac
 
 if [ "$IPADDR" = "dhcp" ]
@@ -136,11 +167,18 @@ else
     fi
 fi
 
-NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/tasks)
-[ "$NSPID" ] || {
-    echo "Could not find a process inside container $GUESTNAME."
-    exit 1
-}
+case "$ENGINE" in
+    "lxc")
+    NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/tasks)
+    [ "$NSPID" ] || {
+        echo "Could not find a process inside container $GUESTNAME."
+        exit 1
+    }
+    ;;
+    "native")
+    NSPID=$CONTAINERPID
+    ;;
+esac
 
 mkdir -p /var/run/netns
 rm -f /var/run/netns/$NSPID
@@ -152,6 +190,7 @@ ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID
     (ip link set $IFNAME type bridge > /dev/null 2>&1) || (brctl addbr $IFNAME)
     ip link set $IFNAME up
 }
+
 
 # If it's a bridge, we need to create a veth pair
 [ $IFTYPE = bridge ] && {
