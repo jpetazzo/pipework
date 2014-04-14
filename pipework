@@ -15,7 +15,7 @@ wrn() {
 err() {
     echo "$PROG ERROR: $*" >&2
 }
-
+TRIES=3
 CONTAINER_IFNAME=eth1
 while (( $# )); do
     case "$1" in
@@ -30,6 +30,12 @@ while (( $# )); do
             ;;
         --wait|-w)
             WAIT=1
+            ;;
+        --tries|-t)
+            # How many tries to find container?
+            shift
+            TRIES=$1
+            log "Try ${TRIES} times to find a container PID"
             ;;
         --route|-r)
             # Collect each route in another ${ROUTE[x]} entry
@@ -146,36 +152,40 @@ fi
 # Second step: find the guest (for now, we only support LXC containers).  Try to find a cgroup
 # matching exactly the provided name.  Use cgroup mount or docker to find a process within the
 # container, remember it in NSPID, and prepare to adjust its container's networking.
-while read dev mnt fstype options dump fsck
-do
-    [ "$fstype" != "cgroup" ] && continue
-    echo $options | grep -qw devices || continue
-    CGROUPMNT=$mnt
-    log "Found cgroup devices mount point: ${CGROUPMNT}"
-done < /proc/mounts
+NSPID=""
+for (( tries = 0; tries < TRIES && ${#NSPID} == 0; tries += 1 )); do
+    (( tries )) && sleep 1
+    while read dev mnt fstype options dump fsck
+    do
+        [ "$fstype" != "cgroup" ] && continue
+        echo $options | grep -qw devices || continue
+        CGROUPMNT=$mnt
+        log "Found cgroup devices mount point: ${CGROUPMNT}"
+    done < /proc/mounts
 
-if [ "$CGROUPMNT" ]; then
-    # OK, try to find NSPID using the cgroup devices mount point.  
-    CGROUPPATH=$( find "$CGROUPMNT" -name "$GUESTNAME" )
-    if (( $( echo -n "${CGROUPPATH}" | wc -l ) == 1 )); then
-        NSPID=$( head -n 1 ${CGROUPPATH}/tasks || true )
-        [ -z "$NSPID" ] && log "Could not find a process using ${CGROUPPATH}"
-    fi
-fi
-if [ -z "$NSPID" ]; then
-    # If we didn't find anything using cgroups, try to lookup the container with Docker.  Normally,
-    # this'll be docker, but under some systems it's named docker.io
-    DOCKER=$( which docker 2>/dev/null || which docker.io 2>/dev/null )
-    if [ "$DOCKER" ]; then
-        NSPID=$( $DOCKER inspect --format='{{ .State.Pid }}' $GUESTNAME || true )
-        if [ -z "$NSPID" ] || [ "$NSPID" = "0" ] || [ "$NSPID" = "<no value>" ]; then
-            log "Container $GUESTNAME not found, not running, or unknown to Docker."
-            NSPID=""
+    if [ "$CGROUPMNT" ]; then
+        # OK, try to find NSPID using the cgroup devices mount point.  
+        CGROUPPATH=$( find "$CGROUPMNT" -name "$GUESTNAME" )
+        if (( $( echo -n "${CGROUPPATH}" | wc -l ) == 1 )); then
+            NSPID=$( head -n 1 ${CGROUPPATH}/tasks || true )
+            [ -z "$NSPID" ] && log "Could not find a process using ${CGROUPPATH}"
         fi
-    else
-        log "Container $GUESTNAME not found, and Docker not installed."
     fi
-fi
+    if [ -z "$NSPID" ]; then
+        # If we didn't find anything using cgroups, try to lookup the container with Docker.  Normally,
+        # this'll be docker, but under some systems it's named docker.io
+        DOCKER=$( which docker 2>/dev/null || which docker.io 2>/dev/null )
+        if [ "$DOCKER" ]; then
+            NSPID=$( $DOCKER inspect --format='{{ .State.Pid }}' $GUESTNAME || true )
+            if [ -z "$NSPID" ] || [ "$NSPID" = "0" ] || [ "$NSPID" = "<no value>" ]; then
+                log "Container $GUESTNAME not found, not running, or unknown to Docker."
+                NSPID=""
+            fi
+        else
+            log "Container $GUESTNAME not found, and Docker not installed."
+        fi
+    fi
+done
 if [ -z "$NSPID" ]; then
     err "Could not find a process inside container ${GUESTNAME}."
     exit 1
@@ -251,7 +261,7 @@ fi
 # running arping within the container, it may not exist and we cannot check.  Note: on Debian/Ubuntu
 # you want iputils-arping (Thomas Habets), not arping (Alexey Kuznetsov)!
 IPADDR=$(echo $IPADDR | cut -d/ -f1) 
-if (( ARP )) && ! ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR >/dev/null 2>&1; then
-    wrn "arping failed; interface may not be immediately reachable"
+if (( ARP )) && ! ARPOUT=$( ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR 2>&1 ); then
+    wrn "arping failed; interface may not be immediately reachable: ${ARPOUT}"
 fi
 exit 0
