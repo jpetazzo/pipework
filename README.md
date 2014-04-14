@@ -86,9 +86,12 @@ Want to connect to those containers using their private addresses? Easy:
 Voilà!
 
 ## Setting container internal interface ##
-By default pipework creates a new interface `eth1` inside the container. In case you want to change this interface name like `eth2`, e.g., to have more than one interface set by pipework, use:
 
-`pipework br1 -i eth2 ...`
+By default pipework creates a new interface `eth1` inside the container. In case
+you want to change this interface name like `eth2`, e.g., to have more than one
+interface set by pipework, use -i <name> (or --interface):
+
+    pipework br1 -i eth2 ...
 
 ## Using a different netmask
 
@@ -103,6 +106,15 @@ Don't forget that all containers should use the same subnet size;
 pipework is not clever enough to use your specified subnet size for
 the first container, and retain it to use it for the other containers.
 
+## Establishing routes over the new interface
+
+If you wish, you may establish any number of new routes using the new interface.
+For example, to route multicast over the new interface:
+
+    pipework br1 --route 224.0.0.0/4 ...
+
+These routes are established after the new interface is brought up, and before
+any default gateway is set.
 
 ## Setting a default gateway
 
