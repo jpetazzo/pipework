@@ -72,6 +72,15 @@ done < /proc/mounts
     exit 1
 }
 
+#
+# If Docker version >= .0.10 , use systemd
+#
+docker_version=/usr/bin/docker version | grep -E "Server" | awk '{print $3}'| sed 's/.*\.\([0-9]*\)\..*/\1/'
+if [[ $docker_version -gt 9  ]] ; then
+CGROUPMNT=/sys/fs/cgroup/systemd/
+GUESTNAME="docker-${GUESTNAME}.scope"
+fi
+
 # Try to find a cgroup matching exactly the provided name.
 N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
 case "$N" in
