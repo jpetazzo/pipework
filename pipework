@@ -75,7 +75,7 @@ done < /proc/mounts
 #
 # If Docker version >= .0.10 , use systemd
 #
-docker_version=/usr/bin/docker version | grep -E "Server" | awk '{print $3}'| sed 's/.*\.\([0-9]*\)\..*/\1/'
+docker_version=`/usr/bin/docker version | grep -E "Server" | awk '{print $3}'| sed 's/.*\.\([0-9]*\)\..*/\1/'`
 if [[ $docker_version -gt 9  ]] ; then
 CGROUPMNT=/sys/fs/cgroup/systemd/
 GUESTNAME="docker-${GUESTNAME}.scope"
