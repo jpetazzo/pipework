@@ -87,8 +87,13 @@ case "$N" in
 	    NN=$(find "$CGROUPMNT" -name "$DOCKERID" | wc -l)
 	    case "$NN" in
 		0)
-		    echo "Container $GUESTNAME doesn't seem to be running."
-		    exit 1
+			# additional check for --privileged containers.
+			ISRUNNIG=$(docker inspect --format='{{.State.Running}}' $GUESTNAME)
+			[ "$ISRUNNIG" = "false" ] && {
+		        echo "Container $GUESTNAME doesn't seem to be running."
+		        exit 1
+			}
+		    GUESTNAME=$DOCKERID
 		    ;;
 		1)
 		    GUESTNAME=$DOCKERID
@@ -136,7 +141,20 @@ else
     fi
 fi
 
-NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/tasks)
+N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
+case "$N" in
+    0)
+    # --privileged containers don´t match cgroup´s
+    NSPID=$(docker inspect --format='{{.State.Pid}}' $GUESTNAME)
+    ;;
+    1)
+    NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/tasks)
+    ;;
+    *)
+    echo "Found more than one container matching $GUESTNAME."
+    exit 1
+    ;;
+esac
 [ "$NSPID" ] || {
     echo "Could not find a process inside container $GUESTNAME."
     exit 1
