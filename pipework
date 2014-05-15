@@ -29,7 +29,7 @@ MACADDR=$4
     echo "Syntax:"
     echo "pipework <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr]"
     echo "pipework <hostinterface> [-i containerinterface] <guest> dhcp [macaddr]"
-    echo "pipework --wait"
+    echo "pipework --wait [-i containerinterface]"
     exit 1
 }
 
