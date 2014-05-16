@@ -8,8 +8,14 @@ Open the settings panel for the VM, go the the "Network" tab, pull down the
 name is something like "PCnet-FAST III"), instead of the default `e1000`
 (Intel PRO/1000). Also, "Promiscuous Mode" should be set to "Allow All".
 If you don't do that, bridged containers won't work, because the virtual
-NIC will filter out all packets with a different MAC address.
+NIC will filter out all packets with a different MAC address.  If you are
+running VirtualBox in headless mode, the command line equivalent of the above
+is `modifyvm --nicpromisc1 allow-all`.  If you are using Vagrant, you can add
+the following to the config for the same effect:
 
+    config.vm.provider "virtualbox" do |v|
+      v.customize ['modifyvm', :id, '--nicpromisc1', 'allow-all']
+    end
 
 ## Docker users: read this!
 
@@ -124,7 +130,33 @@ interfaces eth2 and eth3, using specific (public) IP addresses. Easy!
 Note that this will use `macvlan` subinterfaces, so you can actually put
 multiple containers on the same physical interface.
 
-    
+
+## Let the Docker host communicate over macvlan interfaces
+
+If you use macvlan interfaces as shown in the previous paragraph, you
+will notice that the host will not be able to reach the containers over
+their macvlan interfaces. This is because traffic going in and out of
+macvlan interfaces is segregated from the "root" interface.
+
+If you want to enable that kind of communication, no problem: just
+create a macvlan interface in your host, and move the IP address from
+the "normal" interface to the macvlan interface. 
+
+For instance, on a machine where `eth0` is the main interface, and has
+address `10.1.1.123/24`, with gateway `10.1.1.254`, you would do this:
+
+    ip addr del 10.1.1.123/24 dev eth0
+    ip link add link eth0 dev eth0m type macvlan mode bridge
+    ip link set eth0m up
+    ip addr add 10.1.1.123/24 dev eth0m
+
+Then, you would start a container and assign it a macvlan interface
+the usual way:
+
+    CID=$(docker run -d ...)
+    pipework eth0 $CID 10.1.1.234/24@10.1.1.254
+
+
 ## Wait for the network to be ready
 
 Sometimes, you want the extra network interface to be up and running *before*
