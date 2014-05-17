@@ -15,6 +15,7 @@ else
   CONTAINER_IFNAME=eth1
 fi
 GUESTNAME=$2
+DHCPNAME=$2
 IPADDR=$3
 MACADDR=$4
 
@@ -171,7 +172,7 @@ ip netns exec $NSPID ip link set $GUEST_IFNAME name $CONTAINER_IFNAME
 [ "$MACADDR" ] && ip netns exec $NSPID ip link set $CONTAINER_IFNAME address $MACADDR
 if [ "$IPADDR" = "dhcp" ]
 then
-    ip netns exec $NSPID udhcpc -qi $CONTAINER_IFNAME
+    ip netns exec $NSPID udhcpc -qi $CONTAINER_IFNAME -H $DHCPNAME
 else
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
     [ "$GATEWAY" ] && {
