@@ -100,10 +100,17 @@ esac
 
 if [ "$IPADDR" = "dhcp" ]
 then
-    # We use udhcpc to obtain the DHCP lease, make sure it's installed.
-    which udhcpc >/dev/null || {
-	echo "You asked for DHCP; please install udhcpc first."
-	exit 1
+    # Check for first available dhcp client
+    DHCP_CLIENT_LIST="udhcpc dhcpcd dhclient"
+    for CLIENT in $DHCP_CLIENT_LIST; do
+        which $CLIENT >/dev/null && {
+            DHCP_CLIENT=$CLIENT
+            break
+        }
+    done    
+    [ -z $DHCP_CLIENT ] && { 
+    	echo "You asked for DHCP; but no DHCP client could be found."
+    	exit 1
     }
 else
     # Check if a subnet mask was provided.
@@ -132,8 +139,8 @@ else
   }
 fi
 
-mkdir -p /var/run/netns
-rm -f /var/run/netns/$NSPID
+[ ! -d /var/run/netns ] && mkdir -p /var/run/netns
+[ -f /var/run/netns/$NSPID ] && rm -f /var/run/netns/$NSPID
 ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID
 
 
@@ -171,7 +178,9 @@ ip netns exec $NSPID ip link set $GUEST_IFNAME name $CONTAINER_IFNAME
 [ "$MACADDR" ] && ip netns exec $NSPID ip link set $CONTAINER_IFNAME address $MACADDR
 if [ "$IPADDR" = "dhcp" ]
 then
-    ip netns exec $NSPID udhcpc -qi $CONTAINER_IFNAME
+    [ $DHCP_CLIENT = "udhcpc"  ] && ip netns exec $NSPID $DHCP_CLIENT -qi $CONTAINER_IFNAME
+    [ $DHCP_CLIENT = "dhclient"  ] && ip netns exec $NSPID $DHCP_CLIENT $CONTAINER_IFNAME
+    [ $DHCP_CLIENT = "dhcpcd"  ] && ip netns exec $NSPID $DHCP_CLIENT -q $CONTAINER_IFNAME
 else
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
     [ "$GATEWAY" ] && {
