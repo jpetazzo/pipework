@@ -200,4 +200,11 @@ then
 else
     echo "Warning: arping not found; interface may not be immediately reachable"
 fi
+
+# Flush ARP cache on route to gateway
+if [ "$GATEWAY" ] && which ping > /dev/null 2>&1; 
+then
+    ip netns exec $NSPID ping -I $CONTAINER_IFNAME -c 1 $GATEWAY
+fi
+
 exit 0
