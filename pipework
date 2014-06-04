@@ -204,7 +204,7 @@ fi
 # Flush ARP cache on route to gateway
 if [ "$GATEWAY" ] && which ping > /dev/null 2>&1; 
 then
-    ip netns exec $NSPID ping -I $CONTAINER_IFNAME -c 1 $GATEWAY
+    ip netns exec $NSPID ping -I $CONTAINER_IFNAME -c 1 $GATEWAY > /dev/null 2>&1
 fi
 
 exit 0
