@@ -233,6 +233,19 @@ In other words, if your MAC address is `?X:??:??:??:??:??`, `X` should
 be `2`, `6`, `a`, or `e`. You can check [Wikipedia](
 http://en.wikipedia.org/wiki/MAC_address) if you want even more details.
 
+## Virtual LAN (VLAN)
+
+If you want to attach the container to a specific VLAN, the VLAN ID can be
+specified using the `[MAC]@VID` notation in the MAC address parameter.
+
+**Note:** VLAN attachment is currently only supported for containers to be
+attached to either an Open vSwitch bridge or a physical interface. Linux
+bridges are currently not supported.
+
+The following will attach container zerorpcworker to the Open vSwitch bridge
+ovs0 and attach the container to VLAN ID 10.
+
+    pipework ovsbr0 $(docker run -d zerorpcworker) dhcp @10
 
 ## Support Open vSwitch
 

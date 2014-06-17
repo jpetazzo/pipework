@@ -18,6 +18,14 @@ GUESTNAME=$2
 IPADDR=$3
 MACADDR=$4
 
+if echo $MACADDR | grep -q @
+then
+  VLAN=$(echo $MACADDR | cut -d@ -f2)
+  MACADDR=$(echo $MACADDR | cut -d@ -f1)
+else
+  VLAN=
+fi
+
 [ "$WAIT" ] && {
   while ! grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null
   do sleep 1
@@ -27,8 +35,8 @@ MACADDR=$4
 
 [ "$IPADDR" ] || {
     echo "Syntax:"
-    echo "pipework <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr]"
-    echo "pipework <hostinterface> [-i containerinterface] <guest> dhcp [macaddr]"
+    echo "pipework <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
+    echo "pipework <hostinterface> [-i containerinterface] <guest> dhcp [macaddr][@vlan]"
     echo "pipework --wait"
     exit 1
 }
@@ -58,6 +66,11 @@ else
 	    ;;
     esac
 fi
+
+[ $IFTYPE = bridge ] && [ $BRTYPE = linux ] && [ "$VLAN" ] && {
+    echo "VLAN configuration currently unsupported for Linux bridge."
+    exit 1
+}
 
 # Second step: find the guest (for now, we only support LXC containers)
 while read dev mnt fstype options dump fsck
@@ -151,6 +164,14 @@ else
   }
 fi
 
+# Check if an incompatible VLAN device already exists
+[ $IFTYPE = phys ] && [ "$VLAN" ] && [ -d /sys/class/net/$IFNAME.VLAN ] && {
+    [ -z "$(ip -d link show $IFNAME.$VLAN | grep "vlan.*id $VLAN")" ] && {
+        echo "$IFNAME.VLAN already exists but is not a VLAN device for tag $VLAN"
+        exit 1
+    }
+}
+
 [ ! -d /var/run/netns ] && mkdir -p /var/run/netns
 [ -f /var/run/netns/$NSPID ] && rm -f /var/run/netns/$NSPID
 ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID
@@ -172,7 +193,7 @@ ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID
             (ip link set $LOCAL_IFNAME master $IFNAME > /dev/null 2>&1) || (brctl addif $IFNAME $LOCAL_IFNAME)
             ;;
         openvswitch)
-            ovs-vsctl add-port $IFNAME $LOCAL_IFNAME
+            ovs-vsctl add-port $IFNAME $LOCAL_IFNAME ${VLAN:+"tag=$VLAN"}
             ;;
     esac
     ip link set $LOCAL_IFNAME up
@@ -180,6 +201,14 @@ ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID
 
 # If it's a physical interface, create a macvlan subinterface
 [ $IFTYPE = phys ] && {
+    [ "$VLAN" ] && {
+        [ ! -d /sys/class/net/$IFNAME.$VLAN ] && {
+            ip link add link $IFNAME name $IFNAME.$VLAN type vlan id $VLAN
+        }
+
+        ip link set $IFNAME up
+        IFNAME=$IFNAME.$VLAN
+    }
     GUEST_IFNAME=ph$NSPID$CONTAINER_IFNAME
     ip link add link $IFNAME dev $GUEST_IFNAME type macvlan mode bridge
     ip link set $IFNAME up
