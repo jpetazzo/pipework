@@ -79,11 +79,21 @@ case "$N" in
 	# If we didn't find anything, try to lookup the container with Docker.
 	if which docker >/dev/null
 	then
+        RETRIES=3
+        while [ $RETRIES -gt 0 ]; do
       	    DOCKERPID=$(docker inspect --format='{{ .State.Pid }}' $GUESTNAME)
-            [ "$DOCKERPID" = "<no value>" ] && {
+            [ $DOCKERPID != 0 ] && break
+            sleep 1
+            let RETRIES--
+        done
+        [ "$DOCKERPID" = 0 ] && {
+      		echo "Docker inspect returned invalid PID 0"
+    		exit 1
+      	}
+        [ "$DOCKERPID" = "<no value>" ] && {
       		echo "Container $GUESTNAME not found, and unknown to Docker."
     		exit 1
-      	    }
+      	}
 	else
 	    echo "Container $GUESTNAME not found, and Docker not installed."
 	    exit 1
