@@ -45,11 +45,11 @@ fi
 if [ -d /sys/class/net/$IFNAME ]
 then
     if [ -d /sys/class/net/$IFNAME/bridge ]
-    then 
+    then
         IFTYPE=bridge
         BRTYPE=linux
     elif $(which ovs-vsctl >/dev/null) && $(ovs-vsctl list-br|grep -q ^$IFNAME$)
-    then 
+    then
         IFTYPE=bridge
         BRTYPE=openvswitch
     else IFTYPE=phys
@@ -132,8 +132,8 @@ then
             DHCP_CLIENT=$CLIENT
             break
         }
-    done    
-    [ -z $DHCP_CLIENT ] && { 
+    done
+    [ -z $DHCP_CLIENT ] && {
     	echo "You asked for DHCP; but no DHCP client could be found."
     	exit 1
     }
@@ -236,9 +236,12 @@ fi
 # Give our ARP neighbors a nudge about the new interface
 if which arping > /dev/null 2>&1
 then
-    IPADDR=$(echo $IPADDR | cut -d/ -f1) 
+    IPADDR=$(echo $IPADDR | cut -d/ -f1)
     ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR > /dev/null 2>&1 || true
 else
     echo "Warning: arping not found; interface may not be immediately reachable"
 fi
+
+# Remove NSPID to avoid `ip netns` catch it.
+[ -f /var/run/netns/$NSPID ] && rm -f /var/run/netns/$NSPID
 exit 0
