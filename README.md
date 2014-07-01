@@ -44,9 +44,9 @@ is `modifyvm --nicpromisc1 allow-all`.  If you are using Vagrant, you can add
 the following to the config for the same effect:
 
 ```Ruby
-    config.vm.provider "virtualbox" do |v|
-      v.customize ['modifyvm', :id, '--nicpromisc1', 'allow-all']
-    end
+config.vm.provider "virtualbox" do |v|
+  v.customize ['modifyvm', :id, '--nicpromisc1', 'allow-all']
+end
 ```
 
 #### Docker
