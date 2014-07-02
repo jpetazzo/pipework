@@ -1,6 +1,36 @@
-# Pipework: Software-Defined Networking for Linux Containers
+# Pipework
 
-Pipework lets you connect together containers in arbitrarily complex scenarios.
+**_Software-Defined Networking for Linux Containers_**
+
+Pipework lets you connect together containers in arbitrarily complex scenarios. 
+Pipework works with "plain" LXC containers (created with `lxc-start`),
+and therefore, it also works with the awesome [Docker](http://www.docker.io/).
+
+##### Table of Contents
+* [Things to note](#notes)  
+  * Virtualbox
+  * Docker
+* [LAMP stack with a private network between the MySQL and Apache containers](#lamp)  
+* [Docker integration](#docker_integration)  
+* [Peeking inside the private network](#peeking_inside)  
+* [Setting container internal interface](#setting_internal)  
+* [Using a different netmask](#different_netmask)  
+* [Setting a default gateway](#default_gateway)  
+* [Connect a container to a local physical interface](#local_physical)  
+* [Let the Docker host communicate over macvlan interfaces](#macvlan)  
+* [Wait for the network to be ready](#wait_ready)  
+* [Add the interface without an IP address](#no_ip)  
+* [DHCP](#dhcp)  
+* [Specify a custom MAC address](#custom_mac)  
+* [Virtual LAN (VLAN)](#vlan)  
+* [Support Open vSwitch](#openvswitch)  
+* [Cleanup](#cleanup)  
+
+
+<a name="notes"/>
+### Things to note
+
+#### Virtualbox
 
 **If you use VirtualBox**, you will have to update your VM network settings.
 Open the settings panel for the VM, go the the "Network" tab, pull down the
@@ -13,14 +43,13 @@ running VirtualBox in headless mode, the command line equivalent of the above
 is `modifyvm --nicpromisc1 allow-all`.  If you are using Vagrant, you can add
 the following to the config for the same effect:
 
-    config.vm.provider "virtualbox" do |v|
-      v.customize ['modifyvm', :id, '--nicpromisc1', 'allow-all']
-    end
+```Ruby
+config.vm.provider "virtualbox" do |v|
+  v.customize ['modifyvm', :id, '--nicpromisc1', 'allow-all']
+end
+```
 
-## Docker users: read this!
-
-Pipework works with "plain" LXC containers (created with `lxc-start`),
-and therefore, it also works with the awesome [Docker](http://www.docker.io/).
+#### Docker
 
 **Before using Pipework, please ask on the [docker-user mailing list](
 https://groups.google.com/forum/#!forum/docker-user) if there is a "native"
@@ -35,7 +64,8 @@ the current version of Docker, then okay, let's see how we can help you!
 The following examples show what Pipework can do for you and your containers.
 
 
-## LAMP stack with a private network between the MySQL and Apache containers
+<a name="lamp"/>
+### LAMP stack with a private network between the MySQL and Apache containers
 
 Let's create two containers, running the web tier and the database tier:
 
@@ -67,7 +97,8 @@ This will:
 Now, both containers can ping each other on the 192.168.1.0/24 subnet.
 
 
-## Docker integration
+<a name="docker_integration"/>
+### Docker integration
 
 Pipework can resolve Docker containers names. If the container ID that
 you gave to Pipework cannot be found, Pipework will try to resolve it
@@ -77,7 +108,8 @@ with `docker inspect`. This makes it even simpler to use:
     pipework br1 web1 192.168.12.23/24
 
 
-## Peeking inside the private network
+<a name="peeking_inside"/>
+### Peeking inside the private network
 
 Want to connect to those containers using their private addresses? Easy:
 
@@ -85,12 +117,14 @@ Want to connect to those containers using their private addresses? Easy:
 
 Voilà!
 
-## Setting container internal interface ##
+<a name="setting_internal"/>
+### Setting container internal interface ##
 By default pipework creates a new interface `eth1` inside the container. In case you want to change this interface name like `eth2`, e.g., to have more than one interface set by pipework, use:
 
 `pipework br1 -i eth2 ...`
 
-## Using a different netmask
+<a name="different_netmask"/>
+### Using a different netmask
 
 The IP addresses given to `pipework` are directly passed to the `ip addr`
 tool; so you can append a subnet size using traditional CIDR notation.
@@ -104,7 +138,8 @@ pipework is not clever enough to use your specified subnet size for
 the first container, and retain it to use it for the other containers.
 
 
-## Setting a default gateway
+<a name="default_gateway"/>
+### Setting a default gateway
 
 If you want *outbound* traffic (i.e. when the containers connects
 to the outside world) to go through the interface managed by
@@ -119,7 +154,8 @@ after the IP address and subnet mask:
     pipework br1 $CONTAINERID 192.168.4.25/20@192.168.4.1
 
 
-## Connect a container to a local physical interface
+<a name="local_physical"/>
+### Connect a container to a local physical interface
 
 Let's pretend that you want to run two Hipache instances, listening on real
 interfaces eth2 and eth3, using specific (public) IP addresses. Easy!
@@ -131,7 +167,8 @@ Note that this will use `macvlan` subinterfaces, so you can actually put
 multiple containers on the same physical interface.
 
 
-## Let the Docker host communicate over macvlan interfaces
+<a name="macvlan"/>
+### Let the Docker host communicate over macvlan interfaces
 
 If you use macvlan interfaces as shown in the previous paragraph, you
 will notice that the host will not be able to reach the containers over
@@ -157,7 +194,8 @@ the usual way:
     pipework eth0 $CID 10.1.1.234/24@10.1.1.254
 
 
-## Wait for the network to be ready
+<a name="wait_ready"/>
+### Wait for the network to be ready
 
 Sometimes, you want the extra network interface to be up and running *before*
 starting your service. A dirty (and unreliable) solution would be to add
@@ -170,7 +208,8 @@ until the `eth1` interface is present and in `UP` operational state,
 then exit gracefully.
 
 
-## Add the interface without an IP address
+<a name="no_ip"/>
+### Add the interface without an IP address
 
 If for some reason you want to set the IP address from within the
 container, you can use `0/0` as the IP address. The interface will
@@ -180,7 +219,8 @@ but without configuring an IP address:
     pipework br1 $CONTAINERID 0/0
 
 
-## DHCP
+<a name="dhcp"/>
+### DHCP
 
 You can use DHCP to obtain the IP address of the new interface. Just
 specify `dhcp` instead of an IP address; for instance:
@@ -205,7 +245,8 @@ through extra hoops if you want it to work properly.
 It works fine on plain old wired Ethernet, though.
 
 
-## Specify a custom MAC address
+<a name="custom_mac"/>
+### Specify a custom MAC address
 
 If you need to specify the MAC address to be used (either by the `macvlan`
 subinterface, or the `veth` interface), no problem. Just add it as the
@@ -233,7 +274,8 @@ In other words, if your MAC address is `?X:??:??:??:??:??`, `X` should
 be `2`, `6`, `a`, or `e`. You can check [Wikipedia](
 http://en.wikipedia.org/wiki/MAC_address) if you want even more details.
 
-## Virtual LAN (VLAN)
+<a name="vlan"/>
+### Virtual LAN (VLAN)
 
 If you want to attach the container to a specific VLAN, the VLAN ID can be
 specified using the `[MAC]@VID` notation in the MAC address parameter.
@@ -247,7 +289,8 @@ ovs0 and attach the container to VLAN ID 10.
 
     pipework ovsbr0 $(docker run -d zerorpcworker) dhcp @10
 
-## Support Open vSwitch
+<a name="openvswitch"/>
+### Support Open vSwitch
 
 If you want to attach a container to the Open vSwitch bridge, no problem.
 
@@ -256,7 +299,8 @@ If you want to attach a container to the Open vSwitch bridge, no problem.
     pipework ovsbr0 $(docker run -d mysql /usr/sbin/mysqld_safe) 192.168.1.2/24
 
     
-## Cleanup
+<a name="cleanup"/>
+### Cleanup
 
 When a container is terminated (the last process of the net namespace exits),
 the network interfaces are garbage collected. The interface in the container
