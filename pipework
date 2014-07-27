@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 case "$1" in
@@ -220,9 +220,9 @@ ip netns exec $NSPID ip link set $GUEST_IFNAME name $CONTAINER_IFNAME
 [ "$MACADDR" ] && ip netns exec $NSPID ip link set dev $CONTAINER_IFNAME address $MACADDR
 if [ "$IPADDR" = "dhcp" ]
 then
-    [ $DHCP_CLIENT = "udhcpc"  ] && ip netns exec $NSPID $DHCP_CLIENT -qi $CONTAINER_IFNAME
-    [ $DHCP_CLIENT = "dhclient"  ] && ip netns exec $NSPID $DHCP_CLIENT $CONTAINER_IFNAME
-    [ $DHCP_CLIENT = "dhcpcd"  ] && ip netns exec $NSPID $DHCP_CLIENT -q $CONTAINER_IFNAME
+    [ $DHCP_CLIENT = "udhcpc"  ] && ip netns exec $NSPID $DHCP_CLIENT -qi $CONTAINER_IFNAME -x hostname:$GUESTNAME
+    [ $DHCP_CLIENT = "dhclient"  ] && ip netns exec $NSPID $DHCP_CLIENT $CONTAINER_IFNAME -H $GUESTNAME
+    [ $DHCP_CLIENT = "dhcpcd"  ] && ip netns exec $NSPID $DHCP_CLIENT -q $CONTAINER_IFNAME -h $GUESTNAME
 else
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
     [ "$GATEWAY" ] && {
