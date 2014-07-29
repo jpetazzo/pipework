@@ -239,7 +239,7 @@ You need three things for this to work correctly:
 - obviously, a DHCP server (in the example above, a DHCP server should
   be listening on the network to which we are connected on `eth1`);
 - a DHCP client (either `udhcpc`, `dhclient` or `dhcpcp`) must be installed
-  on your Docker *host* (you don't have to install tt in your containers,
+  on your Docker *host* (you don't have to install it in your containers,
   but it must be present on the host);
 - the underlying network must support bridged frames.
 
