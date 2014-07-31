@@ -227,13 +227,20 @@ specify `dhcp` instead of an IP address; for instance:
 
     pipework eth1 $CONTAINERID dhcp
 
+The value of $CONTAINERID will be provided to the DHCP client to use
+as the hostname in the DHCP request. Depending on the configuration of
+your network's DHCP server, this may enable other machines on the network
+to access the container using the $CONTAINERID as a hostname; therefore,
+specifying $CONTAINERID as a container name rather than a container id
+may be more appropriate in this use-case.
+
 You need three things for this to work correctly:
 
 - obviously, a DHCP server (in the example above, a DHCP server should
   be listening on the network to which we are connected on `eth1`);
-- the `udhcpc` DHCP client must be installed on your Docker *host*
-  (you don't have to install it in your containers, but it must be
-  present on the host);
+- a DHCP client (either `udhcpc`, `dhclient` or `dhcpcp`) must be installed
+  on your Docker *host* (you don't have to install it in your containers,
+  but it must be present on the host);
 - the underlying network must support bridged frames.
 
 The last item might be particularly relevant if you are trying to
