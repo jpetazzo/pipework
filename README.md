@@ -232,7 +232,7 @@ as the hostname in the DHCP request. Depending on the configuration of
 your network's DHCP server, this may enable other machines on the network
 to access the container using the $CONTAINERID as a hostname; therefore,
 specifying $CONTAINERID as a container name rather than a container id
-maybe more appropriate in this use-case.
+may be more appropriate in this use-case.
 
 You need three things for this to work correctly:
 
