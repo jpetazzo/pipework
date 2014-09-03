@@ -186,6 +186,7 @@ address `10.1.1.123/24`, with gateway `10.1.1.254`, you would do this:
     ip link add link eth0 dev eth0m type macvlan mode bridge
     ip link set eth0m up
     ip addr add 10.1.1.123/24 dev eth0m
+    route add default gw 10.1.1.254
 
 Then, you would start a container and assign it a macvlan interface
 the usual way:
