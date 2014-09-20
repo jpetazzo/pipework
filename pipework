@@ -222,7 +222,12 @@ if [ "$IPADDR" = "dhcp" ]
 then
     [ $DHCP_CLIENT = "udhcpc"  ] && ip netns exec $NSPID $DHCP_CLIENT -qi $CONTAINER_IFNAME -x hostname:$GUESTNAME
     [ $DHCP_CLIENT = "dhclient"  ] && ip netns exec $NSPID $DHCP_CLIENT $CONTAINER_IFNAME -H $GUESTNAME
-    [ $DHCP_CLIENT = "dhcpcd"  ] && ip netns exec $NSPID $DHCP_CLIENT -q $CONTAINER_IFNAME -h $GUESTNAME
+    if [ $DHCP_CLIENT = "dhcpcd"  ]
+    then
+        # Allow multiple dhcpcd instances on the same interface (host point of view):
+        [ -f /run/dhcpcd-${CONTAINER_IFNAME}.pid ] && rm -f /run/dhcpcd-${CONTAINER_IFNAME}.pid
+        ip netns exec $NSPID $DHCP_CLIENT -q $CONTAINER_IFNAME -h $GUESTNAME
+    fi
 else
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
     [ "$GATEWAY" ] && {
