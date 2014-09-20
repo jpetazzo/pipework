@@ -226,7 +226,7 @@ then
     then
         # Allow multiple dhcpcd instances on the same interface (host point of view):
         [ -f /run/dhcpcd-${CONTAINER_IFNAME}.pid ] && rm -f /run/dhcpcd-${CONTAINER_IFNAME}.pid
-        ip netns exec $NSPID $DHCP_CLIENT -q $CONTAINER_IFNAME -h $GUESTNAME
+        ip netns exec $NSPID $DHCP_CLIENT -c true -q $CONTAINER_IFNAME -h $GUESTNAME
     fi
 else
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
