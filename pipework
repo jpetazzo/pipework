@@ -97,7 +97,7 @@ case "$N" in
       	    DOCKERPID=$(docker inspect --format='{{ .State.Pid }}' $GUESTNAME)
             [ $DOCKERPID != 0 ] && break
             sleep 1
-            let RETRIES--
+            RETRIES=$((RETRIES - 1))
         done
 
         [ "$DOCKERPID" = 0 ] && {
