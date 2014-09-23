@@ -3,8 +3,8 @@
 **_Software-Defined Networking for Linux Containers_**
 
 Pipework lets you connect together containers in arbitrarily complex scenarios. 
-Pipework works with "plain" LXC containers (created with `lxc-start`),
-and therefore, it also works with the awesome [Docker](http://www.docker.io/).
+Pipework uses cgroups and namespacpace and works with "plain" LXC containers 
+(created with `lxc-start`), and with the awesome [Docker](http://www.docker.io/).
 
 ##### Table of Contents
 * [Things to note](#notes)  
