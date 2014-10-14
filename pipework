@@ -173,6 +173,10 @@ fi
 }
 
 [ ! -d /var/run/netns ] && mkdir -p /var/run/netns
+
+#cleanup /var/run/netns/ directory for next checks -- remove stale links
+find -L /var/run/netns/ -type l -delete
+
 [ -f /var/run/netns/$NSPID ] && {
         echo "/var/run/netns/$NSPID exists, aborting"
         exit 1
@@ -247,6 +251,4 @@ else
     echo "Warning: arping not found; interface may not be immediately reachable"
 fi
 
-# Remove NSPID to avoid `ip netns` catch it.
-[ -f /var/run/netns/$NSPID ] && rm -f /var/run/netns/$NSPID
 exit 0
