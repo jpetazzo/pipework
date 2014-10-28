@@ -48,7 +48,7 @@ then
     then
         IFTYPE=bridge
         BRTYPE=linux
-    elif $(which ovs-vsctl >/dev/null) && $(ovs-vsctl list-br|grep -q ^$IFNAME$)
+    elif $(which ovs-vsctl >/dev/null 2>&1) && $(ovs-vsctl list-br|grep -q ^$IFNAME$)
     then
         IFTYPE=bridge
         BRTYPE=openvswitch
