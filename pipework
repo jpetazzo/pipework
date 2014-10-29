@@ -54,7 +54,12 @@ then
         BRTYPE=openvswitch
     elif [ $(cat /sys/class/net/$IFNAME/type) -eq 32 ]
     then
-        IFTYPE=infiniband
+        IFTYPE=ipoib
+		# If container interface name begins with eth, override. Otherwise assume the -i option was used
+        case $CONTAINER_IFNAME in 
+			eth*) CONTAINER_IFNAME="ib1"
+				;;
+		esac
     else IFTYPE=phys
     fi
 else
@@ -201,8 +206,8 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
     esac
     ip link set $LOCAL_IFNAME up
 }
-# If it's an infiniband interface, use container interface name ib0
-[ $IFTYPE = infiniband ] && {
+# If it's an infiniband ipoib interface, use container interface name ib0
+[ $IFTYPE = ipoib ] && {
   GUEST_IFNAME=$CONTAINER_IFNAME
 }
 # If it's a physical interface, create a macvlan subinterface
