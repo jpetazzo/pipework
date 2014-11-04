@@ -52,14 +52,22 @@ then
     then
         IFTYPE=bridge
         BRTYPE=openvswitch
+
+    # Check for Infiniband IPoIB interface type 32
     elif [ $(cat /sys/class/net/$IFNAME/type) -eq 32 ]
     then
         IFTYPE=ipoib
-		# If container interface name begins with eth, override. Otherwise assume the -i option was used
+	# The ipoib (ip over infiniband) driver doesn't like the net device name
+        # being prefixed with 'eth'. eth1 is the default created by pipework.   
+        # Therefore check the dev name and default it to ib1 if anything other 
+        # than ib* is used as a prefix 
         case $CONTAINER_IFNAME in 
-			eth*) CONTAINER_IFNAME="ib1"
-				;;
-		esac
+            ib*)  
+                ;; 
+            *) 
+                CONTAINER_IFNAME="ib1" 
+                ;;
+        esac
     else IFTYPE=phys
     fi
 else
@@ -206,10 +214,17 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
     esac
     ip link set $LOCAL_IFNAME up
 }
-# If it's an infiniband ipoib interface, use container interface name ib0
+
+# If it's an infiniband ipoib interface, use container interface name set 
+# previously. ib1 (default) 
+# Note: no macvlan subinterface or ethernet bridge can be created against an 
+# ipoib interface. Infiniband is not ethernet. ipoib is an IP layer for it.
+# To provide additional ipoib interfaces to containers use SR-IOV and pipework 
+# to assign them.
 [ $IFTYPE = ipoib ] && {
   GUEST_IFNAME=$CONTAINER_IFNAME
 }
+
 # If it's a physical interface, create a macvlan subinterface
 [ $IFTYPE = phys ] && {
     [ "$VLAN" ] && {
@@ -224,6 +239,7 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
     ip link add link $IFNAME dev $GUEST_IFNAME mtu $MTU type macvlan mode bridge
     ip link set $IFNAME up
 }
+
 ip link set $GUEST_IFNAME netns $NSPID
 ip netns exec $NSPID ip link set $GUEST_IFNAME name $CONTAINER_IFNAME
 [ "$MACADDR" ] && ip netns exec $NSPID ip link set dev $CONTAINER_IFNAME address $MACADDR
