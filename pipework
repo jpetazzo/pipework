@@ -57,7 +57,7 @@ then
     elif [ $(cat /sys/class/net/$IFNAME/type) -eq 32 ]
     then
         IFTYPE=ipoib
-	# The ipoib (ip over infiniband) driver doesn't like the net device name
+        # The ipoib (ip over infiniband) driver doesn't like the net device name
         # being prefixed with 'eth'. eth1 is the default created by pipework.   
         # Therefore check the dev name and default it to ib1 if anything other 
         # than ib* is used as a prefix 
@@ -215,8 +215,7 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
     ip link set $LOCAL_IFNAME up
 }
 
-# If it's an infiniband ipoib interface, use container interface name set 
-# previously. ib1 (default) 
+# Note: if no container interface name was specified, pipework will default to ib1
 # Note: no macvlan subinterface or ethernet bridge can be created against an 
 # ipoib interface. Infiniband is not ethernet. ipoib is an IP layer for it.
 # To provide additional ipoib interfaces to containers use SR-IOV and pipework 
