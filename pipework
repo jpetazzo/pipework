@@ -236,6 +236,8 @@ else
     }
     ip netns exec $NSPID ip link set $CONTAINER_IFNAME up
     [ "$GATEWAY" ] && {
+	ip netns exec $NSPID ip route get $GATEWAY >/dev/null 2>&1 || \
+		ip netns exec $NSPID ip route add $GATEWAY/32 dev $CONTAINER_IFNAME
 	ip netns exec $NSPID ip route replace default via $GATEWAY
     }
 fi
