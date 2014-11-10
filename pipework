@@ -42,7 +42,7 @@ fi
 }
 
 # First step: determine type of first argument (bridge, physical interface...)
-if [ -d /sys/class/net/$IFNAME ]
+if [ -d /sys/class/net/$(echo $IFNAME|cut -f1 -d:) ]
 then
     if [ -d /sys/class/net/$IFNAME/bridge ]
     then
