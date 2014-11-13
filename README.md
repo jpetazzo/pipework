@@ -24,6 +24,7 @@ Pipework uses cgroups and namespacpace and works with "plain" LXC containers
 * [Specify a custom MAC address](#custom_mac)  
 * [Virtual LAN (VLAN)](#vlan)  
 * [Support Open vSwitch](#openvswitch)  
+* [Support Infiniband](#infiniband)
 * [Cleanup](#cleanup)  
 
 
@@ -122,6 +123,8 @@ Voilà!
 By default pipework creates a new interface `eth1` inside the container. In case you want to change this interface name like `eth2`, e.g., to have more than one interface set by pipework, use:
 
 `pipework br1 -i eth2 ...`
+
+**Note:**: for infiniband IPoIB interfaces, the default interface name is `ib0` and not `eth1`.
 
 <a name="different_netmask"/>
 ### Using a different netmask
@@ -282,6 +285,7 @@ In other words, if your MAC address is `?X:??:??:??:??:??`, `X` should
 be `2`, `6`, `a`, or `e`. You can check [Wikipedia](
 http://en.wikipedia.org/wiki/MAC_address) if you want even more details.
 
+**Note:**  Setting the MAC address of an IPoIB interface is not supported.
 <a name="vlan"/>
 ### Virtual LAN (VLAN)
 
@@ -306,7 +310,16 @@ If you want to attach a container to the Open vSwitch bridge, no problem.
     ovsbr0
     pipework ovsbr0 $(docker run -d mysql /usr/sbin/mysqld_safe) 192.168.1.2/24
 
-    
+<a name="infiniband"/>
+### Support Infiniband IPoIB
+
+Passing an IPoIB interface to a container is supported.  However, the entire device
+is moved into the network namespace of the container.  It therefore becomes hidden
+from the host.  
+
+To provide infiniband to multiple containers, use SR-IOV and pass
+the virtual function devices to the containers.
+  
 <a name="cleanup"/>
 ### Cleanup
 
