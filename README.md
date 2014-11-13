@@ -314,6 +314,8 @@ If you want to attach a container to the Open vSwitch bridge, no problem.
     ovsbr0
     pipework ovsbr0 $(docker run -d mysql /usr/sbin/mysqld_safe) 192.168.1.2/24
 
+If the ovs bridge doesn't exist, it will be automatically created
+
 <a name="infiniband"/>
 ### Support Infiniband IPoIB
 
