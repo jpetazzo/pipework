@@ -28,47 +28,56 @@ else
   VLAN=
 fi
 
-[ "$IPADDR" ] || {
+[ "$IPADDR" ] || [ "$WAIT" ] || {
     echo "Syntax:"
     echo "pipework <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
     echo "pipework <hostinterface> [-i containerinterface] <guest> dhcp [macaddr][@vlan]"
-    echo "pipework --wait"
+    echo "pipework --wait [-i containerinterface]"
     exit 1
 }
 
-# First step: determine type of first argument (bridge, physical interface...)
-if [ -d /sys/class/net/$IFNAME ]
-then
-    if [ -d /sys/class/net/$IFNAME/bridge ]
+# First step: determine type of first argument (bridge, physical interface...), skip if --wait set
+if [ -z "$WAIT" ]; then 
+    if [ -d /sys/class/net/$IFNAME ]
     then
-        IFTYPE=bridge
-        BRTYPE=linux
-    elif $(which ovs-vsctl >/dev/null 2>&1) && $(ovs-vsctl list-br|grep -q ^$IFNAME$)
-    then
-        IFTYPE=bridge
-        BRTYPE=openvswitch
-    elif [ $(cat /sys/class/net/$IFNAME/type) -eq 32 ]; # Infiniband IPoIB interface type 32
-    then
-        IFTYPE=ipoib
-		# The IPoIB kernel module is fussy, set device name to ib0 if not overridden
-		CONTAINER_IFNAME=${CONTAINER_IFNAME:-ib0}
-    else IFTYPE=phys
+        if [ -d /sys/class/net/$IFNAME/bridge ]
+        then
+            IFTYPE=bridge
+            BRTYPE=linux
+        elif $(which ovs-vsctl >/dev/null 2>&1) && $(ovs-vsctl list-br|grep -q ^$IFNAME$)
+        then
+            IFTYPE=bridge
+            BRTYPE=openvswitch
+        elif [ $(cat /sys/class/net/$IFNAME/type) -eq 32 ]; # Infiniband IPoIB interface type 32
+        then
+            IFTYPE=ipoib
+            # The IPoIB kernel module is fussy, set device name to ib0 if not overridden
+            CONTAINER_IFNAME=${CONTAINER_IFNAME:-ib0}
+        else IFTYPE=phys
+        fi
+    else
+        case "$IFNAME" in
+        br*)
+            IFTYPE=bridge
+            BRTYPE=linux
+            ;;
+        *)
+            echo "I do not know how to setup interface $IFNAME."
+            exit 1
+        ;;
+        esac
     fi
-else
-    case "$IFNAME" in
-	br*)
-	    IFTYPE=bridge
-	    BRTYPE=linux
-	    ;;
-	*)
-	    echo "I do not know how to setup interface $IFNAME."
-	    exit 1
-	    ;;
-    esac
 fi
 
 # Set the default container interface name to eth1 if not already set
 CONTAINER_IFNAME=${CONTAINER_IFNAME:-eth1}
+
+[ "$WAIT" ] && {
+  while ! grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null
+  do sleep 1
+  done
+  exit 0
+}
 
 [ $IFTYPE = bridge ] && [ $BRTYPE = linux ] && [ "$VLAN" ] && {
     echo "VLAN configuration currently unsupported for Linux bridge."
@@ -78,13 +87,6 @@ CONTAINER_IFNAME=${CONTAINER_IFNAME:-eth1}
 [ $IFTYPE = ipoib ] && [ $MACADDR ] && {
 	echo "MACADDR configuration unsupported for IPoIB interfaces."
 	exit 1
-}
-
-[ "$WAIT" ] && {
-  while ! grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null
-  do sleep 1
-  done
-  exit 0
 }
 
 # Second step: find the guest (for now, we only support LXC containers)
