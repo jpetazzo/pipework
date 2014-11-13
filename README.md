@@ -24,6 +24,7 @@ Pipework uses cgroups and namespacpace and works with "plain" LXC containers
 * [Specify a custom MAC address](#custom_mac)  
 * [Virtual LAN (VLAN)](#vlan)  
 * [Support Open vSwitch](#openvswitch)  
+* [Support Infiniband](#infiniband)
 * [Cleanup](#cleanup)  
 
 
@@ -314,7 +315,9 @@ If you want to attach a container to the Open vSwitch bridge, no problem.
 
 Passing an IPoIB interface to a container is supported.  However, the entire device
 is moved into the network namespace of the container.  It therefore becomes hidden
-from the host.  To provide infiniband to multiple containers, use SR-IOV and pass
+from the host.  
+
+To provide infiniband to multiple containers, use SR-IOV and pass
 the virtual function devices to the containers.
   
 <a name="cleanup"/>
