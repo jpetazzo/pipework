@@ -57,18 +57,6 @@ if [ -z "$WAIT" ]; then
         fi
     else
         case "$IFNAME" in
-        br*)
-            IFTYPE=bridge
-            BRTYPE=linux
-            ;;
-        *)
-            echo "I do not know how to setup interface $IFNAME."
-            exit 1
-        ;;
-        esac
-    fi
-else
-    case "$IFNAME" in
 	br*)
 	    IFTYPE=bridge
 	    BRTYPE=linux
