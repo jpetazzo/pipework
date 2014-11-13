@@ -8,12 +8,14 @@ case "$1" in
 esac
 
 IFNAME=$1
+
+# default value set further down if not set here
+CONTAINER_IFNAME=
 if [ "$2" = "-i" ]; then
   CONTAINER_IFNAME=$3
   shift 2
-else
-  CONTAINER_IFNAME=eth1
 fi
+
 GUESTNAME=$2
 IPADDR=$3
 MACADDR=$4
@@ -25,13 +27,6 @@ then
 else
   VLAN=
 fi
-
-[ "$WAIT" ] && {
-  while ! grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null
-  do sleep 1
-  done
-  exit 0
-}
 
 [ "$IPADDR" ] || {
     echo "Syntax:"
@@ -52,22 +47,11 @@ then
     then
         IFTYPE=bridge
         BRTYPE=openvswitch
-
-    # Check for Infiniband IPoIB interface type 32
-    elif [ $(cat /sys/class/net/$IFNAME/type) -eq 32 ]
+    elif [ $(cat /sys/class/net/$IFNAME/type) -eq 32 ]; # Infiniband IPoIB interface type 32
     then
         IFTYPE=ipoib
-        # The ipoib (ip over infiniband) driver doesn't like the net device name
-        # being prefixed with 'eth'. eth1 is the default created by pipework.   
-        # Therefore check the dev name and default it to ib1 if anything other 
-        # than ib* is used as a prefix 
-        case $CONTAINER_IFNAME in 
-            ib*)  
-                ;; 
-            *) 
-                CONTAINER_IFNAME="ib1" 
-                ;;
-        esac
+		# The IPoIB kernel module is fussy, set device name to ib0 if not overridden
+		CONTAINER_IFNAME=${CONTAINER_IFNAME:-ib0}
     else IFTYPE=phys
     fi
 else
@@ -83,9 +67,24 @@ else
     esac
 fi
 
+# Set the default container interface name to eth1 if not already set
+CONTAINER_IFNAME=${CONTAINER_IFNAME:-eth1}
+
 [ $IFTYPE = bridge ] && [ $BRTYPE = linux ] && [ "$VLAN" ] && {
     echo "VLAN configuration currently unsupported for Linux bridge."
     exit 1
+}
+
+[ $IFTYPE = ipoib ] && [ $MACADDR ] && {
+	echo "MACADDR configuration unsupported for IPoIB interfaces."
+	exit 1
+}
+
+[ "$WAIT" ] && {
+  while ! grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null
+  do sleep 1
+  done
+  exit 0
 }
 
 # Second step: find the guest (for now, we only support LXC containers)
@@ -215,7 +214,7 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
     ip link set $LOCAL_IFNAME up
 }
 
-# Note: if no container interface name was specified, pipework will default to ib1
+# Note: if no container interface name was specified, pipework will default to ib0
 # Note: no macvlan subinterface or ethernet bridge can be created against an 
 # ipoib interface. Infiniband is not ethernet. ipoib is an IP layer for it.
 # To provide additional ipoib interfaces to containers use SR-IOV and pipework 
