@@ -51,6 +51,7 @@ if [ -z "$WAIT" ]; then
         elif [ $(cat /sys/class/net/$IFNAME/type) -eq 32 ]; # Infiniband IPoIB interface type 32
         then
             IFTYPE=ipoib
+			PKEY=$VLAN
             # The IPoIB kernel module is fussy, set device name to ib0 if not overridden
             CONTAINER_IFNAME=${CONTAINER_IFNAME:-ib0}
         else IFTYPE=phys
@@ -230,15 +231,6 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
     ip link set $LOCAL_IFNAME up
 }
 
-# Note: if no container interface name was specified, pipework will default to ib0
-# Note: no macvlan subinterface or ethernet bridge can be created against an 
-# ipoib interface. Infiniband is not ethernet. ipoib is an IP layer for it.
-# To provide additional ipoib interfaces to containers use SR-IOV and pipework 
-# to assign them.
-[ $IFTYPE = ipoib ] && {
-  GUEST_IFNAME=$CONTAINER_IFNAME
-}
-
 # If it's a physical interface, create a macvlan subinterface
 [ $IFTYPE = phys ] && {
     [ "$VLAN" ] && {
@@ -251,6 +243,24 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
     }
     GUEST_IFNAME=ph$NSPID$CONTAINER_IFNAME
     ip link add link $IFNAME dev $GUEST_IFNAME mtu $MTU type macvlan mode bridge
+    ip link set $IFNAME up
+}
+
+# If it's an ipoib interface, create a virtual ipoib interface
+# Note: if no container interface name was specified, pipework will default to ib0
+# Note: no macvlan subinterface or ethernet bridge can be created against an 	
+# ipoib interface. Infiniband is not ethernet. ipoib is an IP layer for it and has it's own type
+[ $IFTYPE = ipoib ] && {
+    GUEST_IFNAME=$IFNAME.$NSPID
+
+    # Infiniband doesn't have VLANs but Partition Keys.  PKEYs are similar to VLANs, but not quite the same
+    [ "$PKEY" ] && {
+        # If a Partition Key is set, use it
+        GUEST_IFNAME=$IFNAME.$PKEY.$NSPID
+        PKEY="pkey $PKEY"
+    }
+
+    ip link add link $IFNAME name $GUEST_IFNAME type ipoib $PKEY
     ip link set $IFNAME up
 }
 

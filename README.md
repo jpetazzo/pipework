@@ -319,13 +319,19 @@ If the ovs bridge doesn't exist, it will be automatically created
 <a name="infiniband"/>
 ### Support Infiniband IPoIB
 
-Passing an IPoIB interface to a container is supported.  However, the entire device
-is moved into the network namespace of the container.  It therefore becomes hidden
-from the host.  
+Passing an IPoIB interface to a container is supported.  The ipoib device is
+created as a virtual device.  It's similar to a macvlan but for ipoib devices.
+Also supported are partition keys.
 
-To provide infiniband to multiple containers, use SR-IOV and pass
-the virtual function devices to the containers.
-  
+The following will attach a container to ib0
+
+    pipework ib0 $CONTAINERID 10.10.10.10/24
+
+The following will do the same but connect it to ib0 with pkey 8001
+
+    pipework ib0 $CONTAINERID 10.10.10.10/24 @8001
+
+ 
 <a name="cleanup"/>
 ### Cleanup
 
