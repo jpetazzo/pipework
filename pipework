@@ -247,6 +247,9 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
 }
 
 # If it's an ipoib interface, create a virtual ipoib interface
+# Note: if no container interface name was specified, pipework will default to ib0
+# Note: no macvlan subinterface or ethernet bridge can be created against an 	
+# ipoib interface. Infiniband is not ethernet. ipoib is an IP layer for it and has it's own type
 [ $IFTYPE = ipoib ] && {
     GUEST_IFNAME=$IFNAME.$NSPID
 
