@@ -329,7 +329,7 @@ The following will attach a container to ib0
 
 The following will do the same but connect it to ib0 with pkey 8001
 
-    pipework ib0 $(docker run -d hpcworker) 10.10.10.10/24 @8001
+    pipework ib0 $CONTAINERID 10.10.10.10/24 @8001
 
  
 <a name="cleanup"/>
