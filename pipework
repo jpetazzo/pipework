@@ -259,9 +259,8 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
         GUEST_IFNAME=$IFNAME.$PKEY.$NSPID
         PKEY="pkey $PKEY"
     }
-
     ip link add link $IFNAME name $GUEST_IFNAME type ipoib $PKEY
-    ip link set $IFNAME up
+	IFNAME=$GUEST_IFNAME
 }
 
 ip link set $GUEST_IFNAME netns $NSPID
@@ -291,13 +290,16 @@ else
     }
 fi
 
-# Give our ARP neighbors a nudge about the new interface
-if which arping > /dev/null 2>&1
-then
-    IPADDR=$(echo $IPADDR | cut -d/ -f1)
-    ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR > /dev/null 2>&1 || true
-else
-    echo "Warning: arping not found; interface may not be immediately reachable"
+if [ $IFTYPE != "ipoib" ] 
+then   
+    # Give our ARP neighbors a nudge about the new interface
+    if which arping > /dev/null 2>&1
+    then
+        IPADDR=$(echo $IPADDR | cut -d/ -f1)
+        ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR > /dev/null 2>&1 || true
+    else
+        echo "Warning: arping not found; interface may not be immediately reachable"
+    fi
 fi
 
 # Remove NSPID to avoid `ip netns` catch it.
