@@ -319,8 +319,8 @@ If the ovs bridge doesn't exist, it will be automatically created
 <a name="infiniband"/>
 ### Support Infiniband IPoIB
 
-Passing an IPoIB interface to a container is supported.  The ipoib device is
-created as a virtual device.  It's similar to a macvlan but for ipoib devices.
+Passing an IPoIB interface to a container is supported.  The IPoIB device is
+created as a virtual device.  It's similar to a macvlan but for IPoIB devices.
 Also supported are partition keys.
 
 The following will attach a container to ib0
