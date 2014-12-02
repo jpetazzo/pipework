@@ -256,7 +256,7 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
         PKEY="pkey $PKEY"
     }
     ip link add link $IFNAME name $GUEST_IFNAME type ipoib $PKEY
-	IFNAME=$GUEST_IFNAME
+    IFNAME=$GUEST_IFNAME
 }
 
 ip link set $GUEST_IFNAME netns $NSPID
