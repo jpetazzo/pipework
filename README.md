@@ -211,7 +211,7 @@ and before starting the service, call `pipework --wait`. It will wait
 until the `eth1` interface is present and in `UP` operational state,
 then exit gracefully.
 
-If you meed to wait on an interface other than eth1, pass the -i flag like
+If you need to wait on an interface other than eth1, pass the -i flag like
 this:
 
     pipework --wait -i ib0
