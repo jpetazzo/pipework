@@ -178,6 +178,13 @@ else
     else
         GATEWAY=
     fi
+    # Check if the IP is currently used by others.
+    IP=$(echo $IPADDR | cut -d/ -f1)
+    if ping -c 1 -w 2 $IP > /dev/null 2>&1
+    then
+        echo "The IP address '$IPADDR' conflicts with other system on this network."
+        exit 1
+    fi
 fi
 
 if [ $DOCKERPID ]; then
