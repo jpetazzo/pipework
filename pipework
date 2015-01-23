@@ -178,6 +178,8 @@ else
     else
         GATEWAY=
     fi
+    # Calculate broadcast address
+    eval $(ipcalc -b $IPADDR)
 fi
 
 if [ $DOCKERPID ]; then
@@ -269,7 +271,7 @@ then
     fi
     [ $DHCP_CLIENT = "dhcpcd"  ] && ip netns exec $NSPID $DHCP_CLIENT -q $CONTAINER_IFNAME -h $GUESTNAME
 else
-    ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
+    ip netns exec $NSPID ip addr add $IPADDR brd $BROADCAST dev $CONTAINER_IFNAME
     [ "$GATEWAY" ] && {
 	ip netns exec $NSPID ip route delete default >/dev/null 2>&1 && true
     }
