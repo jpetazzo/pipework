@@ -44,7 +44,7 @@ if [ -z "$WAIT" ]; then
         then
             IFTYPE=bridge
             BRTYPE=linux
-        elif $(which ovs-vsctl >/dev/null 2>&1) && $(ovs-vsctl list-br|grep -q ^$IFNAME$)
+        elif $(command -v ovs-vsctl >/dev/null 2>&1) && $(ovs-vsctl list-br|grep -q ^$IFNAME$)
         then
             IFTYPE=bridge
             BRTYPE=openvswitch
@@ -62,7 +62,7 @@ if [ -z "$WAIT" ]; then
             BRTYPE=linux
             ;;
         ovs*)
-            if ! $(which ovs-vsctl >/dev/null) 
+            if ! $(command -v ovs-vsctl >/dev/null) 
             then
                 echo "Need OVS installed on the system to create an ovs bridge"
             exit 1
@@ -116,7 +116,7 @@ N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
 case "$N" in
     0)
 	# If we didn't find anything, try to lookup the container with Docker.
-	if which docker >/dev/null
+	if command -v docker >/dev/null
 	then
         RETRIES=3
         while [ $RETRIES -gt 0 ]; do
@@ -154,7 +154,7 @@ then
     # Check for first available dhcp client
     DHCP_CLIENT_LIST="udhcpc dhcpcd dhclient"
     for CLIENT in $DHCP_CLIENT_LIST; do
-        which $CLIENT >/dev/null && {
+        command -v $CLIENT >/dev/null && {
             DHCP_CLIENT=$CLIENT
             break
         }
@@ -282,7 +282,7 @@ else
 fi
 
 # Give our ARP neighbors a nudge about the new interface
-if which arping > /dev/null 2>&1
+if command -v arping > /dev/null 2>&1
 then
     IPADDR=$(echo $IPADDR | cut -d/ -f1)
     ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR > /dev/null 2>&1 || true
