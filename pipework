@@ -37,7 +37,7 @@ fi
 }
 
 # First step: determine type of first argument (bridge, physical interface...), skip if --wait set
-if [ -z "$WAIT" ]; then 
+if [ -z "$WAIT" ]; then
     if [ -d /sys/class/net/$IFNAME ]
     then
         if [ -d /sys/class/net/$IFNAME/bridge ]
@@ -62,7 +62,7 @@ if [ -z "$WAIT" ]; then
             BRTYPE=linux
             ;;
         ovs*)
-            if ! $(which ovs-vsctl >/dev/null) 
+            if ! $(which ovs-vsctl >/dev/null)
             then
                 echo "Need OVS installed on the system to create an ovs bridge"
             exit 1
@@ -231,9 +231,9 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
 }
 
 # Note: if no container interface name was specified, pipework will default to ib0
-# Note: no macvlan subinterface or ethernet bridge can be created against an 
+# Note: no macvlan subinterface or ethernet bridge can be created against an
 # ipoib interface. Infiniband is not ethernet. ipoib is an IP layer for it.
-# To provide additional ipoib interfaces to containers use SR-IOV and pipework 
+# To provide additional ipoib interfaces to containers use SR-IOV and pipework
 # to assign them.
 [ $IFTYPE = ipoib ] && {
   GUEST_IFNAME=$CONTAINER_IFNAME
