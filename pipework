@@ -267,7 +267,7 @@ then
         kill "$(cat "/var/run/dhclient.$NSPID.pid")"
         rm "/var/run/dhclient.$NSPID.pid"
     fi
-    [ $DHCP_CLIENT = "dhcpcd"  ] && ip netns exec $NSPID $DHCP_CLIENT -q $CONTAINER_IFNAME -h $GUESTNAME
+    [ $DHCP_CLIENT = "dhcpcd"  ] && ip netns exec $NSPID $DHCP_CLIENT -A -c true -q $CONTAINER_IFNAME -h $GUESTNAME
 else
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
     [ "$GATEWAY" ] && {
