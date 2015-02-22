@@ -37,7 +37,7 @@ fi
 }
 
 # First step: determine type of first argument (bridge, physical interface...), skip if --wait set
-if [ -z "$WAIT" ]; then 
+if [ -z "$WAIT" ]; then
     if [ -d /sys/class/net/$IFNAME ]
     then
         if [ -d /sys/class/net/$IFNAME/bridge ]
@@ -62,7 +62,7 @@ if [ -z "$WAIT" ]; then
             BRTYPE=linux
             ;;
         ovs*)
-            if ! $(which ovs-vsctl >/dev/null) 
+            if ! $(which ovs-vsctl >/dev/null)
             then
                 echo "Need OVS installed on the system to create an ovs bridge"
             exit 1
@@ -116,7 +116,7 @@ N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
 case "$N" in
     0)
 	# If we didn't find anything, try to lookup the container with Docker.
-	if which docker >/dev/null
+	if which docker >/dev/null 2>&1
 	then
         RETRIES=3
         while [ $RETRIES -gt 0 ]; do
@@ -154,7 +154,7 @@ then
     # Check for first available dhcp client
     DHCP_CLIENT_LIST="udhcpc dhcpcd dhclient"
     for CLIENT in $DHCP_CLIENT_LIST; do
-        which $CLIENT >/dev/null && {
+        which $CLIENT >/dev/null 2>&1 && {
             DHCP_CLIENT=$CLIENT
             break
         }
@@ -231,9 +231,9 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
 }
 
 # Note: if no container interface name was specified, pipework will default to ib0
-# Note: no macvlan subinterface or ethernet bridge can be created against an 
+# Note: no macvlan subinterface or ethernet bridge can be created against an
 # ipoib interface. Infiniband is not ethernet. ipoib is an IP layer for it.
-# To provide additional ipoib interfaces to containers use SR-IOV and pipework 
+# To provide additional ipoib interfaces to containers use SR-IOV and pipework
 # to assign them.
 [ $IFTYPE = ipoib ] && {
   GUEST_IFNAME=$CONTAINER_IFNAME
@@ -267,7 +267,7 @@ then
         kill "$(cat "/var/run/dhclient.$NSPID.pid")"
         rm "/var/run/dhclient.$NSPID.pid"
     fi
-    [ $DHCP_CLIENT = "dhcpcd"  ] && ip netns exec $NSPID $DHCP_CLIENT -q $CONTAINER_IFNAME -h $GUESTNAME
+    [ $DHCP_CLIENT = "dhcpcd"  ] && ip netns exec $NSPID $DHCP_CLIENT -4 -A -c /bin/true -q $CONTAINER_IFNAME -h $GUESTNAME
 else
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
     [ "$GATEWAY" ] && {
@@ -282,7 +282,7 @@ else
 fi
 
 # Give our ARP neighbors a nudge about the new interface
-if which arping > /dev/null 2>&1
+if which arping >/dev/null 2>&1
 then
     IPADDR=$(echo $IPADDR | cut -d/ -f1)
     ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR > /dev/null 2>&1 || true
