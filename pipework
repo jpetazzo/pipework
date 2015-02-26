@@ -18,7 +18,15 @@ fi
 
 GUESTNAME=$2
 IPADDR=$3
-MACADDR=$4
+
+if echo $4 | grep -q :
+then
+  MACADDR=$4
+  ROUTES=$5
+else
+  MACADDR=
+  ROUTES=$4
+fi
 
 if echo $MACADDR | grep -q @
 then
@@ -31,6 +39,7 @@ fi
 [ "$IPADDR" ] || [ "$WAIT" ] || {
     echo "Syntax:"
     echo "pipework <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
+    echo "pipework <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan] [route1,route2,...]"
     echo "pipework <hostinterface> [-i containerinterface] <guest> dhcp [macaddr][@vlan]"
     echo "pipework --wait [-i containerinterface]"
     exit 1
@@ -275,9 +284,15 @@ else
     }
     ip netns exec $NSPID ip link set $CONTAINER_IFNAME up
     [ "$GATEWAY" ] && {
-	ip netns exec $NSPID ip route get $GATEWAY >/dev/null 2>&1 || \
-		ip netns exec $NSPID ip route add $GATEWAY/32 dev $CONTAINER_IFNAME
-	ip netns exec $NSPID ip route replace default via $GATEWAY
+        ip netns exec $NSPID ip route get $GATEWAY >/dev/null 2>&1 || \
+                ip netns exec $NSPID ip route add $GATEWAY/32 dev $CONTAINER_IFNAME
+        ip netns exec $NSPID ip route replace default via $GATEWAY
+    [ "$ROUTES" ] && {
+        ROUTES=`echo $ROUTES | tr ',' ' '`;
+        for ROUTE in $ROUTES; do
+            ip netns exec $NSPID ip route add $ROUTE via $GATEWAY dev $CONTAINER_IFNAME
+        done
+    }
     }
 fi
 

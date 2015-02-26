@@ -15,6 +15,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 * [Peeking inside the private network](#peeking_inside)  
 * [Setting container internal interface](#setting_internal)  
 * [Using a different netmask](#different_netmask)  
+* [Setting a route on the internal interface](#route_internal)
 * [Setting a default gateway](#default_gateway)  
 * [Connect a container to a local physical interface](#local_physical)  
 * [Let the Docker host communicate over macvlan interfaces](#macvlan)  
@@ -155,6 +156,17 @@ This can be automated by Pipework, by adding the gateway address
 after the IP address and subnet mask:
 
     pipework br1 $CONTAINERID 192.168.4.25/20@192.168.4.1
+
+
+<a name="route_internal"/>
+### Setting routes on the internal interface
+
+In you add more than one internal interface, you may want to add other routes than the default one. 
+This could be performed by adding network and masks after the gateway (comma-separated)
+
+    pipework br1 $CONTAINERID 192.168.4.25/20@192.168.4.1 192.168.5.0/25,192.168.6.0/24
+
+Please note that the last added internal interface will take the default route
 
 
 <a name="local_physical"/>
