@@ -38,7 +38,6 @@ fi
 
 [ "$IPADDR" ] || [ "$WAIT" ] || {
     echo "Syntax:"
-    echo "pipework <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
     echo "pipework <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan] [route1,route2,...]"
     echo "pipework <hostinterface> [-i containerinterface] <guest> dhcp [macaddr][@vlan]"
     echo "pipework --wait [-i containerinterface]"
