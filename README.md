@@ -161,7 +161,7 @@ after the IP address and subnet mask:
 <a name="route_internal"/>
 ### Setting routes on the internal interface
 
-In you add more than one internal interface, or perform specific use-cases, you may want to add other routes than the default one. 
+If you add more than one internal interface, or perform specific use-cases, you may want to add other routes than the default one. 
 This could be performed by adding network and masks after the gateway (comma-separated)
 
     pipework br1 $CONTAINERID 192.168.4.25/20@192.168.4.1 192.168.5.0/25,192.168.6.0/24
