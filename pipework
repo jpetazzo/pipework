@@ -10,7 +10,8 @@ help() {
     echo "  pipework <hostinterface> <guest> -a gre <ipaddr> <remote>"
     echo "  pipework <hostinterface> <guest> -a dhcp"
     echo "  pipework <hostinterface> <guest> -c"
-    echo "The following options are available in any of the above commands:"
+    echo
+    echo "The following options are available in any of the above commands: "
     echo "    -i|--interface <name>  (Container interface name)"
     echo "    -m|--mac <mac>         (MAC address to set)"
     echo "    -M|--mtu <mtu>         (MTU to set on the container interface - be sure to have >= on host interface)"
@@ -154,11 +155,13 @@ while [ $# -gt 0 ]; do
                 ipip)
                 shift
                 IPIP_ADDR=$1
-                check_module ipip
+                check_kernel_module ipip
+                check_kernel_module ip6_tunnel
                 ;;
                 gre)
                 GRE_REMOTE=$1
-                check_module gre
+                check_kernel_module gre
+                check_kernel_module ip6_gre
                 ;;
                 dhcp)
                 DHCP=1
