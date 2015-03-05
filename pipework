@@ -1,92 +1,342 @@
 #!/bin/sh
 set -e
 
-case "$1" in
-    --wait)
-      WAIT=1
-      ;;
-esac
-
-IFNAME=$1
-
-# default value set further down if not set here
-CONTAINER_IFNAME=
-if [ "$2" = "-i" ]; then
-  CONTAINER_IFNAME=$3
-  shift 2
-fi
-
-GUESTNAME=$2
-IPADDR=$3
-MACADDR=$4
-
-if echo $MACADDR | grep -q @
-then
-  VLAN=$(echo $MACADDR | cut -d@ -f2)
-  MACADDR=$(echo $MACADDR | cut -d@ -f1)
-else
-  VLAN=
-fi
-
-[ "$IPADDR" ] || [ "$WAIT" ] || {
-    echo "Syntax:"
-    echo "pipework <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
-    echo "pipework <hostinterface> [-i containerinterface] <guest> dhcp [macaddr][@vlan]"
-    echo "pipework --wait [-i containerinterface]"
+help() {
+    echo "Syntax: "
+    echo "  pipework <hostinterface> <guest> -a link"
+    echo "  pipework <hostinterface> <guest> -a ip <ipaddr>/<subnet>[@default_gateway]"
+    echo "  pipework <hostinterface> <guest> -a secip <ipaddr>/<subnet>[@default_gateway]"
+    echo "  pipework <hostinterface> <guest> -a ipip <ipaddr>"
+    echo "  pipework <hostinterface> <guest> -a gre <ipaddr> <remote>"
+    echo "  pipework <hostinterface> <guest> -a dhcp"
+    echo "  pipework <hostinterface> <guest> -a tc (...)"
+    echo "  pipework <hostinterface> <guest> -c"
+    echo
+    echo "The following options are available in any of the above commands: "
+    echo "    -a|--action <action> <spec>  (Requested action spec)"
+    echo "    -i|--interface <name>        (Container interface name)"
+    echo "    -m|--mac <mac>               (MAC address to set)"
+    echo "    -M|--mtu <mtu>               (MTU to set on the container interface - be sure to have >= on host interface)"
+    echo "    -V|--vlan <id>               (VLAN ID/tag to use - only supported by Open vSwitch bridge or direct physical interface)"
+    echo "    -r|--route <network>         (Network routes to reach via container interface, comma-separated)"
+    echo "    -v|--verbose                 (log activity)"
+    echo "    -x|--trace                   (trace all bash commands)"
+    echo "    -h|--help                    (print this help and exit)"
     exit 1
 }
 
-# First step: determine type of first argument (bridge, physical interface...), skip if --wait set
-if [ -z "$WAIT" ]; then 
-    if [ -d /sys/class/net/$IFNAME ]
+# Default values
+CONTAINER_IFNAME="eth1"
+VERBOSE=0
+
+# To debug iproute2 commands when verbose activated, maybe not a good idea to do it like this
+run() {
+    [ $VERBOSE = 1 ] && {
+        echo $@
+    }
+    eval $@
+    return $?
+}
+
+# Check if the specifies kernel module exists and is loaded, exit if not
+# Usage check_kernal_module MODULE_NAME
+check_kernel_module() {
+    MODULE_NAME=$1
+    modinfo $MODULE_NAME >/dev/null 2>&1 || {
+        echo "Error: module $MODULE_NAME is required to perform this action" 
+        exit 1
+    }
+}
+
+# Set IP config on a network namespace
+# Usage set_netns_ip NSPID CONTAINER_IFNAME IPADDR GATEWAY ROUTES
+set_netns_ip() {
+
+    [ $# -lt 3 ] && {
+        echo "set_netns_ip : bad usage"
+        exit 1
+    }
+
+    # No POSIX-compliant mean to declare local variables, so be careful of the scope
+    # http://stackoverflow.com/questions/18597697/posix-compliant-way-to-scope-variables-to-a-function-in-a-shell-script
+    NSPID=$1
+    CONTAINER_IFNAME=$2
+    IPADDR=$3
+    [ "$4" = "" ] || GATEWAY=$4
+    [ "$5" = "" ] || ROUTES=$5
+
+    # Test IPv4/IPv6 
+    IPROUTE_PREFIX="ip -4"
+    echo $IPADDR | grep -q : && {
+        IPROUTE_PREFIX="ip -6"
+    }
+
+    if [ "$IPROUTE_PREFIX" = "ip -6" ]
     then
-        if [ -d /sys/class/net/$IFNAME/bridge ]
+        # Patch for secondary IPv6 : add preffered_lft 0 cause you may not want the last added IP to be the source of the whole v6 traffic
+        # https://lists.debian.org/debian-isp/2011/05/msg00047.html
+        ip netns exec $NSPID $IPROUTE_PREFIX addr sh $CONTAINER_IFNAME | grep -q inet6 > /dev/null 2>&1 && {
+            IPROUTE_OPTIONS="preferred_lft 0"
+        }
+    fi
+
+    # Set IP/gateway/routes
+    run ip netns exec $NSPID $IPROUTE_PREFIX addr add $IPADDR dev $CONTAINER_IFNAME $IPROUTE_OPTIONS
+    [ "$GATEWAY" ] && {
+    run ip netns exec $NSPID $IPROUTE_PREFIX route delete default >/dev/null 2>&1 && true
+    }
+    run ip netns exec $NSPID $IPROUTE_PREFIX link set $CONTAINER_IFNAME up
+    [ "$GATEWAY" ] && {
+        run ip netns exec $NSPID $IPROUTE_PREFIX route get $GATEWAY >/dev/null 2>&1 || \
+                run ip netns exec $NSPID $IPROUTE_PREFIX route add $GATEWAY/32 dev $CONTAINER_IFNAME
+        run ip netns exec $NSPID $IPROUTE_PREFIX route replace default via $GATEWAY
+        [ "$ROUTES" ] && {
+            ROUTES=$(echo $ROUTES | tr ',' ' ')
+            for ROUTE in $ROUTES; do
+                run ip netns exec $NSPID $IPROUTE_PREFIX route add $ROUTE via $GATEWAY dev $CONTAINER_IFNAME
+            done
+        }
+    }
+
+    # Give our ARP neighbors a nudge about the new interface
+    if which arping > /dev/null 2>&1
+    then
+        IPADDR=$(echo $IPADDR | cut -d/ -f1)
+        run ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR > /dev/null 2>&1 || true
+    else
+        echo "Warning: arping not found; interface may not be immediately reachable"
+    fi
+}
+
+# Setup an IP tunnel
+# Usage set_tunnel ipip|gre NSPID CONTAINER_IFNAME IPADDR ROUTES
+set_tunnel() {
+
+    ACTION=$1
+    NSPID=$2
+    CONTAINER_IFNAME=$3
+    IPADDR=$4
+    ROUTES=$5
+
+    # Test IPv4/IPv6 
+    if echo $IPADDR | grep -q :
+    then
+        IPROUTE_PREFIX="ip -6"
+        if [ $ACTION = ipip ]
         then
-            IFTYPE=bridge
-            BRTYPE=linux
-        elif $(which ovs-vsctl >/dev/null 2>&1) && $(ovs-vsctl list-br|grep -q ^$IFNAME$)
+            TUNL_NAME=ip6tnl1 # TODO kernel 3.16 : output "No such device" and doesn't work with ip6tnl0
+            TUNL_MODE=ip6ip6
+        elif [ $ACTION = gre ]
         then
-            IFTYPE=bridge
-            BRTYPE=openvswitch
-        elif [ $(cat /sys/class/net/$IFNAME/type) -eq 32 ]; # Infiniband IPoIB interface type 32
-        then
-            IFTYPE=ipoib
-            # The IPoIB kernel module is fussy, set device name to ib0 if not overridden
-            CONTAINER_IFNAME=${CONTAINER_IFNAME:-ib0}
-        else IFTYPE=phys
+            TUNL_NAME=ip6gre1
+            TUNL_MODE=ip6gre
         fi
     else
-        case "$IFNAME" in
-        br*)
-            IFTYPE=bridge
-            BRTYPE=linux
-            ;;
-        ovs*)
-            if ! $(which ovs-vsctl >/dev/null) 
-            then
-                echo "Need OVS installed on the system to create an ovs bridge"
-            exit 1
-            fi
-            IFTYPE=bridge
-            BRTYPE=openvswitch
-            ;;
-        *)
-            echo "I do not know how to setup interface $IFNAME."
-            exit 1
-            ;;
-        esac
+        IPROUTE_PREFIX="ip -4"
+        if [ $ACTION = ipip ]
+        then
+            TUNL_NAME=tunl1
+            TUNL_MODE=ipip
+        elif [ $ACTION = gre ]
+        then
+            TUNL_NAME=gre1
+            TUNL_MODE=gre
+        fi
     fi
+    # If the tunnel already exists, just address it (allows secondary address on tunneling interfaces)
+    run ip netns exec $NSPID $IPROUTE_PREFIX tunnel add $TUNL_NAME mode $TUNL_MODE dev $CONTAINER_IFNAME 3>&1 1>&2 2>&3 | grep -v "File exists" && true
+
+    # Patch for secondary IPv6 : add preffered_lft 0 cause you may not want the last added IP to be the source of the whole v6 traffic
+    # https://lists.debian.org/debian-isp/2011/05/msg00047.html
+    if [ "$IPROUTE_PREFIX" = "ip -6" ]
+    then
+        ip netns exec $NSPID $IPROUTE_PREFIX tunnel sh $TUNL_NAME > /dev/null 2>&1 && {
+            IPROUTE_OPTIONS="preferred_lft 0"
+        }
+    fi
+
+    ADDRS=$(echo $IPADDR | tr ',' ' ')
+    for ADDR in $ADDRS; do
+        run ip netns exec $NSPID $IPROUTE_PREFIX addr add $IPADDR dev $TUNL_NAME $IPROUTE_OPTIONS
+    done
+
+    [ "$ROUTES" ] && {
+        ROUTES=$(echo $ROUTES | tr ',' ' ')
+        for ROUTE in $ROUTES; do
+            run ip netns exec $NSPID $IPROUTE_PREFIX route add $ROUTE via $GATEWAY dev $CONTAINER_IFNAME
+        done
+    }
+    run ip netns exec $NSPID $IPROUTE_PREFIX link set $TUNL_NAME up 
+}
+
+
+## Parse args
+if [ $# -lt 3 ]
+then
+    help
 fi
 
-# Set the default container interface name to eth1 if not already set
-CONTAINER_IFNAME=${CONTAINER_IFNAME:-eth1}
+IFNAME=$1
+shift
+GUESTNAME=$1
+shift
 
-[ "$WAIT" ] && {
-  while ! grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null
-  do sleep 1
-  done
-  exit 0
-}
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --trace|-x)
+            # Active shell trace
+            set -x
+            ;;
+        --verbose|-v)
+            # Active shell trace
+            VERBOSE=1
+            ;;
+        --action|-a)
+            # Allows different levels of network plumbing (Link/Adressing/DHCP/...)
+            shift
+            ACTION=$1
+            if [ "$ACTION" = "" ]
+            then
+                help
+            fi
+            case "$ACTION" in
+                # Collect args specific to actions
+                link)
+                   ;;
+                ip|sec_ip)
+                    shift
+                    IPADDR=$1
+                    # Check if a subnet mask was provided.
+                    echo $IPADDR | grep -q / || {
+                        echo "The IP address should include a netmask."
+                        echo "Maybe you meant $IPADDR/24 ?"
+                        exit 1
+                    }
+                    # Check if a gateway address was provided.
+                    if echo $IPADDR | grep -q @
+                    then
+                        GATEWAY=$(echo $IPADDR | cut -d@ -f2)
+                        IPADDR=$(echo $IPADDR | cut -d@ -f1)
+                    else
+                        GATEWAY=
+                    fi
+                    ;;
+                dhcp)
+                    DHCP=1
+                    ;;
+                # This part is a little future-proof, as it seems there's many patchs to come in the kernel 
+                # See http://thread.gmane.org/gmane.linux.network/315933/focus=321753 and https://patchwork.ozlabs.org/patch/440660/ 
+                # Doing the following setup "works" but we share the tunnel in all the namespaces (useless) and we can't delete anymore the gre/gretap/tun@NONE interfaces 
+                # - https://ringzraw.wordpress.com/2014/09/14/linux-network-namespaces-and-gre/
+                ipip)
+                    shift
+                    check_kernel_module ipip
+                    check_kernel_module ip6_tunnel
+                    [ $# -eq 0 ] && {
+                        help
+                        exit 1
+                    }
+                    IPADDR=$1
+                    ;;
+                gre)
+                    shift
+                    check_kernel_module gre
+                    check_kernel_module ip6_gre
+                    [ $# -eq 0 ] && {
+                        help
+                        exit 1
+                    }
+                    IPADDR=$1
+                    ;;
+                tc)
+                    shift
+                    QOS=$@
+					shift $(($#-1))
+                    ;;
+            esac
+            ;;
+        --interface|-i)
+            # Container interface name 
+            shift
+            CONTAINER_IFNAME=$1
+            ;;
+        --mac|-m)
+            # Specific MAC address
+            shift
+            MACADDR=$1
+            ;;
+        --mtu|-M)
+            # Specific MTU (be sure the bridge is well configured !)
+            shift
+            MTU=$1
+            ;;
+        --vlan|-V)
+            # Specific VLAN
+            shift
+            VLAN=$1
+            ;;
+        --routes|-r)
+            # To add routing table entries, comma-separated
+            shift
+            ROUTES=$1
+            # Check if a subnet mask was provided.
+            echo $ROUTES | grep -q / || {
+                echo "The IP address should include a netmask."
+                echo "Maybe you meant $IPADDR/24 ?"
+                exit 1
+            }
+            ;;
+        --clean|-c)
+            # To clean all the network operations
+            CLEAN=1
+            ;;
+        *)
+            help
+            ;;
+    esac
+    shift
+done
+
+## First step: determine type of first argument (bridge, physical interface...)
+
+if [ -d /sys/class/net/$IFNAME ]
+then
+    if [ -d /sys/class/net/$IFNAME/bridge ]
+    then
+        IFTYPE=bridge
+        BRTYPE=linux
+    elif $(which ovs-vsctl >/dev/null 2>&1) && $(ovs-vsctl list-br|grep -q ^$IFNAME$)
+    then
+        IFTYPE=bridge
+        BRTYPE=openvswitch
+    elif [ $(cat /sys/class/net/$IFNAME/type) -eq 32 ]; # Infiniband IPoIB interface type 32
+    then
+        IFTYPE=ipoib
+        # The IPoIB kernel module is fussy, set device name to ib0 if not overridden
+        CONTAINER_IFNAME=${CONTAINER_IFNAME:-ib0}
+    else IFTYPE=phys
+    fi
+else
+    case "$IFNAME" in
+    br*)
+        IFTYPE=bridge
+        BRTYPE=linux
+        ;;
+    ovs*)
+        if ! $(which ovs-vsctl >/dev/null)
+        then
+            echo "Need OVS installed on the system to create an ovs bridge"
+            exit 1
+        fi
+        IFTYPE=bridge
+        BRTYPE=openvswitch
+        ;;
+    *)
+        echo "I do not know how to setup interface $IFNAME."
+        exit 1
+        ;;
+    esac
+fi
 
 [ $IFTYPE = bridge ] && [ $BRTYPE = linux ] && [ "$VLAN" ] && {
     echo "VLAN configuration currently unsupported for Linux bridge."
@@ -94,11 +344,12 @@ CONTAINER_IFNAME=${CONTAINER_IFNAME:-eth1}
 }
 
 [ $IFTYPE = ipoib ] && [ $MACADDR ] && {
-	echo "MACADDR configuration unsupported for IPoIB interfaces."
-	exit 1
+    echo "MACADDR configuration unsupported for IPoIB interfaces."
+    exit 1
 }
 
-# Second step: find the guest (for now, we only support LXC containers)
+## Second step: find the guest (for now, we only support LXC containers)
+
 while read dev mnt fstype options dump fsck
 do
     [ "$fstype" != "cgroup" ] && continue
@@ -115,70 +366,39 @@ done < /proc/mounts
 N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
 case "$N" in
     0)
-	# If we didn't find anything, try to lookup the container with Docker.
-	if which docker >/dev/null
-	then
+    # If we didn't find anything, try to lookup the container with Docker.
+    if which docker >/dev/null
+    then
         RETRIES=3
-        while [ $RETRIES -gt 0 ]; do
-      	    DOCKERPID=$(docker inspect --format='{{ .State.Pid }}' $GUESTNAME)
+        while [ $RETRIES -gt 0 ]; do # TODO : Why do we retry ? 
+            DOCKERPID=$(docker inspect --format='{{ .State.Pid }}' $GUESTNAME)
             [ $DOCKERPID != 0 ] && break
             sleep 1
             RETRIES=$((RETRIES - 1))
         done
 
-        [ "$DOCKERPID" = 0 ] && {
-      		echo "Docker inspect returned invalid PID 0"
-    		exit 1
-      	}
-
-        [ "$DOCKERPID" = "<no value>" ] && {
-      		echo "Container $GUESTNAME not found, and unknown to Docker."
-    		exit 1
-      	}
-	else
-	    echo "Container $GUESTNAME not found, and Docker not installed."
-	    exit 1
-	fi
-	;;
-    1)
-	true
-	;;
-    *)
-	echo "Found more than one container matching $GUESTNAME."
-	exit 1
-	;;
-esac
-
-if [ "$IPADDR" = "dhcp" ]
-then
-    # Check for first available dhcp client
-    DHCP_CLIENT_LIST="udhcpc dhcpcd dhclient"
-    for CLIENT in $DHCP_CLIENT_LIST; do
-        which $CLIENT >/dev/null && {
-            DHCP_CLIENT=$CLIENT
-            break
+        [ "$DOCKERPID" = "0" ] && {
+            echo "Docker inspect returned invalid PID 0"
+            exit 1
         }
-    done
-    [ -z $DHCP_CLIENT ] && {
-    	echo "You asked for DHCP; but no DHCP client could be found."
-    	exit 1
-    }
-else
-    # Check if a subnet mask was provided.
-    echo $IPADDR | grep -q / || {
-	echo "The IP address should include a netmask."
-	echo "Maybe you meant $IPADDR/24 ?"
-	exit 1
-    }
-    # Check if a gateway address was provided.
-    if echo $IPADDR | grep -q @
-    then
-        GATEWAY=$(echo $IPADDR | cut -d@ -f2)
-        IPADDR=$(echo $IPADDR | cut -d@ -f1)
+
+        [ "$DOCKERPID" = "" ] && {
+            echo "Container $GUESTNAME not found, and unknown to Docker."
+            exit 1
+        }
     else
-        GATEWAY=
+        echo "Container $GUESTNAME not found, and Docker not installed."
+        exit 1
     fi
-fi
+    ;;
+    1)
+    true
+    ;;
+    *)
+    echo "Found more than one container matching $GUESTNAME."
+    exit 1
+    ;;
+esac
 
 if [ $DOCKERPID ]; then
   NSPID=$DOCKERPID
@@ -190,6 +410,24 @@ else
   }
 fi
 
+## Third step : configure the network !
+
+if [ "$ACTION" = "dhcp" ]
+then
+    # Check for first available dhcp client
+    DHCP_CLIENT_LIST="udhcpc dhcpcd dhclient"
+    for CLIENT in $DHCP_CLIENT_LIST; do
+        which $CLIENT >/dev/null && {
+            DHCP_CLIENT=$CLIENT
+            break
+        }
+    done
+    [ -z $DHCP_CLIENT ] && {
+        echo "You asked for DHCP; but no DHCP client could be found."
+        exit 1
+    }
+fi
+
 # Check if an incompatible VLAN device already exists
 [ $IFTYPE = phys ] && [ "$VLAN" ] && [ -d /sys/class/net/$IFNAME.VLAN ] && {
     [ -z "$(ip -d link show $IFNAME.$VLAN | grep "vlan.*id $VLAN")" ] && {
@@ -198,97 +436,102 @@ fi
     }
 }
 
+# Initialize network namespace
 [ ! -d /var/run/netns ] && mkdir -p /var/run/netns
 [ -f /var/run/netns/$NSPID ] && rm -f /var/run/netns/$NSPID
 ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID
 
-# Check if we need to create a bridge.
-[ $IFTYPE = bridge ] && [ ! -d /sys/class/net/$IFNAME ] && {
-    [ $BRTYPE = linux ] && {
-        (ip link add dev $IFNAME type bridge > /dev/null 2>&1) || (brctl addbr $IFNAME)
-        ip link set $IFNAME up
+# Only Link and IP adressing actions implies to initialize netns, bridges, veth pairs
+[ $ACTION = ip ] || [ $ACTION = link ] && {
+    [ "$CLEAN" = 1 ] && [ $IFTYPE = bridge ] && [ BRTYPE = openvswitch ] && {
+        # Delete OVS port as it doesn't do it by itself even if the veth pair isn't here anymore
+        # TODO : WTF we doesn't have $NSPID anymore, cause the container is stopped, so this part of the code will never be reached
+        run ovs-vsctl del-port $IFNAME $LOCAL_IFNAME
     }
-    [ $BRTYPE = openvswitch ] && {
-        ovs-vsctl add-br $IFNAME
-    }
-}
 
-MTU=$(ip link show $IFNAME | awk '{print $5}')
-# If it's a bridge, we need to create a veth pair
-[ $IFTYPE = bridge ] && {
-    LOCAL_IFNAME="v${CONTAINER_IFNAME}pl${NSPID}"
-    GUEST_IFNAME="v${CONTAINER_IFNAME}pg${NSPID}"
-    ip link add name $LOCAL_IFNAME mtu $MTU type veth peer name $GUEST_IFNAME mtu $MTU
-    case "$BRTYPE" in
-        linux)
-            (ip link set $LOCAL_IFNAME master $IFNAME > /dev/null 2>&1) || (brctl addif $IFNAME $LOCAL_IFNAME)
-            ;;
-        openvswitch)
-            ovs-vsctl add-port $IFNAME $LOCAL_IFNAME ${VLAN:+"tag=$VLAN"}
-            ;;
-    esac
-    ip link set $LOCAL_IFNAME up
-}
-
-# Note: if no container interface name was specified, pipework will default to ib0
-# Note: no macvlan subinterface or ethernet bridge can be created against an 
-# ipoib interface. Infiniband is not ethernet. ipoib is an IP layer for it.
-# To provide additional ipoib interfaces to containers use SR-IOV and pipework 
-# to assign them.
-[ $IFTYPE = ipoib ] && {
-  GUEST_IFNAME=$CONTAINER_IFNAME
-}
-
-# If it's a physical interface, create a macvlan subinterface
-[ $IFTYPE = phys ] && {
-    [ "$VLAN" ] && {
-        [ ! -d /sys/class/net/$IFNAME.$VLAN ] && {
-            ip link add link $IFNAME name $IFNAME.$VLAN mtu $MTU type vlan id $VLAN
+    # Check if we need to create a bridge.
+    [ $IFTYPE = bridge ] && [ ! -d /sys/class/net/$IFNAME ] && {
+        [ $BRTYPE = linux ] && {
+            (run ip link add dev $IFNAME type bridge > /dev/null 2>&1) || (run brctl addbr $IFNAME)
+            run ip link set $IFNAME up
         }
-
-        ip link set $IFNAME up
-        IFNAME=$IFNAME.$VLAN
+        [ $BRTYPE = openvswitch ] && {
+            run ovs-vsctl add-br $IFNAME
+        }
     }
-    GUEST_IFNAME=ph$NSPID$CONTAINER_IFNAME
-    ip link add link $IFNAME dev $GUEST_IFNAME mtu $MTU type macvlan mode bridge
-    ip link set $IFNAME up
+
+    # If not defined, MTU will be the same of the once set on the host interface
+    [ "$MTU" = "" ] && {
+        MTU=$(ip link show $IFNAME | awk '{print $5}')
+    }
+    # If it's a bridge, we need to create a veth pair
+    [ $IFTYPE = bridge ] && {
+        LOCAL_IFNAME="v${CONTAINER_IFNAME}pl${NSPID}"
+        GUEST_IFNAME="v${CONTAINER_IFNAME}pg${NSPID}"
+        (run ip link add name $LOCAL_IFNAME mtu $MTU type veth peer name $GUEST_IFNAME mtu $MTU)
+        case "$BRTYPE" in
+            linux)
+                (run ip link set $LOCAL_IFNAME master $IFNAME > /dev/null 2>&1) || (run brctl addif $IFNAME $LOCAL_IFNAME)
+                ;;
+            openvswitch)
+                run ovs-vsctl add-port $IFNAME $LOCAL_IFNAME ${VLAN:+"tag=$VLAN"}
+                ;;
+        esac
+        run ip link set $LOCAL_IFNAME up || true
+    }
+    # Note: if no container interface name was specified, pipework will default to ib0
+    # Note: no macvlan subinterface or ethernet bridge can be created against an 
+    # ipoib interface. Infiniband is not ethernet. ipoib is an IP layer for it.
+    # To provide additional ipoib interfaces to containers use SR-IOV and pipework 
+    # to assign them.
+    [ $IFTYPE = ipoib ] && {
+      GUEST_IFNAME=$CONTAINER_IFNAME
+    }
+
+    # If it's a physical interface, create a macvlan subinterface
+    [ $IFTYPE = phys ] && {
+        [ "$VLAN" ] && {
+            [ ! -d /sys/class/net/$IFNAME.$VLAN ] && {
+                run ip link add link $IFNAME name $IFNAME.$VLAN mtu $MTU type vlan id $VLAN
+            }
+            run ip link set $IFNAME up 
+            IFNAME=$IFNAME.$VLAN
+        }
+        GUEST_IFNAME=ph$NSPID$CONTAINER_IFNAME
+        run ip link add link $IFNAME dev $GUEST_IFNAME mtu $MTU type macvlan mode bridge
+        run ip link set $IFNAME up
+    }
+
+    run ip link set $GUEST_IFNAME netns $NSPID
+    run ip netns exec $NSPID ip link set $GUEST_IFNAME name $CONTAINER_IFNAME
+    [ "$MACADDR" ] && run ip netns exec $NSPID ip link set dev $CONTAINER_IFNAME address $MACADDR
 }
 
-ip link set $GUEST_IFNAME netns $NSPID
-ip netns exec $NSPID ip link set $GUEST_IFNAME name $CONTAINER_IFNAME
-[ "$MACADDR" ] && ip netns exec $NSPID ip link set dev $CONTAINER_IFNAME address $MACADDR
-if [ "$IPADDR" = "dhcp" ]
-then
-    [ $DHCP_CLIENT = "udhcpc"  ] && ip netns exec $NSPID $DHCP_CLIENT -qi $CONTAINER_IFNAME -x hostname:$GUESTNAME
-    if [ $DHCP_CLIENT = "dhclient"  ]
-    then
-        # kill dhclient after get ip address to prevent device be used after container close
-        ip netns exec $NSPID $DHCP_CLIENT -pf "/var/run/dhclient.$NSPID.pid" $CONTAINER_IFNAME
-        kill "$(cat "/var/run/dhclient.$NSPID.pid")"
-        rm "/var/run/dhclient.$NSPID.pid"
-    fi
-    [ $DHCP_CLIENT = "dhcpcd"  ] && ip netns exec $NSPID $DHCP_CLIENT -q $CONTAINER_IFNAME -h $GUESTNAME
-else
-    ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
-    [ "$GATEWAY" ] && {
-	ip netns exec $NSPID ip route delete default >/dev/null 2>&1 && true
-    }
-    ip netns exec $NSPID ip link set $CONTAINER_IFNAME up
-    [ "$GATEWAY" ] && {
-	ip netns exec $NSPID ip route get $GATEWAY >/dev/null 2>&1 || \
-		ip netns exec $NSPID ip route add $GATEWAY/32 dev $CONTAINER_IFNAME
-	ip netns exec $NSPID ip route replace default via $GATEWAY
-    }
-fi
-
-# Give our ARP neighbors a nudge about the new interface
-if which arping > /dev/null 2>&1
-then
-    IPADDR=$(echo $IPADDR | cut -d/ -f1)
-    ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR > /dev/null 2>&1 || true
-else
-    echo "Warning: arping not found; interface may not be immediately reachable"
-fi
+case "$ACTION" in
+    link)
+        exit 0
+        ;;
+    dhcp)
+        [ $DHCP_CLIENT = "udhcpc"  ] && run ip netns exec $NSPID $DHCP_CLIENT -qi $CONTAINER_IFNAME -x hostname:$GUESTNAME
+        if [ $DHCP_CLIENT = "dhclient"  ]
+        then
+            # kill dhclient after get ip address to prevent device be used after container close
+            run ip netns exec $NSPID $DHCP_CLIENT -pf "/var/run/dhclient.$NSPID.pid" $CONTAINER_IFNAME
+            kill "$(cat "/var/run/dhclient.$NSPID.pid")"
+            rm "/var/run/dhclient.$NSPID.pid"
+        fi
+        [ $DHCP_CLIENT = "dhcpcd"  ] && run ip netns exec $NSPID $DHCP_CLIENT -q $CONTAINER_IFNAME -h $GUESTNAME
+        ;;
+    ip|sec_ip)
+        set_netns_ip $NSPID $CONTAINER_IFNAME $IPADDR $GATEWAY $ROUTES
+        ;;
+    ipip|gre)
+        set_tunnel $ACTION $NSPID $CONTAINER_IFNAME $IPADDR $ROUTES
+        ;;
+    tc)
+        run ip netns exec $NSPID tc $QOS
+        ;;
+esac
 
 # Remove NSPID to avoid `ip netns` catch it.
 [ -f /var/run/netns/$NSPID ] && rm -f /var/run/netns/$NSPID
