@@ -174,7 +174,7 @@ for (( tries = 0; tries < TRIES && ${#NSPID} == 0; tries += 1 )); do
     if [ -z "$NSPID" ]; then
         # If we didn't find anything using cgroups, try to lookup the container with Docker.  Normally,
         # this'll be docker, but under some systems it's named docker.io
-        DOCKER=$( which docker 2>/dev/null || which docker.io 2>/dev/null )
+        DOCKER=$( which docker 2>/dev/null )
         if [ "$DOCKER" ]; then
             NSPID=$( $DOCKER inspect --format='{{ .State.Pid }}' $GUESTNAME || true )
             if [ -z "$NSPID" ] || [ "$NSPID" = "0" ] || [ "$NSPID" = "<no value>" ]; then
