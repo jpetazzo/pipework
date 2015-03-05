@@ -71,8 +71,17 @@ set_netns_ip() {
         IPROUTE_PREFIX="ip -6"
     }
 
+    if [ "$IPROUTE_PREFIX" = "ip -6" ]
+    then
+        # Patch for secondary IPv6 : add preffered_lft 0 cause you may not want the last added IP to be the source of the whole v6 traffic
+        # https://lists.debian.org/debian-isp/2011/05/msg00047.html
+        ip netns exec $NSPID $IPROUTE_PREFIX addr sh $CONTAINER_IFNAME | grep -q inet6 > /dev/null 2>&1 && {
+            IPROUTE_OPTIONS="preferred_lft 0"
+        }
+    fi
+
     # Set IP/gateway/routes
-    run ip netns exec $NSPID $IPROUTE_PREFIX addr add $IPADDR dev $CONTAINER_IFNAME
+    run ip netns exec $NSPID $IPROUTE_PREFIX addr add $IPADDR dev $CONTAINER_IFNAME $IPROUTE_OPTIONS
     [ "$GATEWAY" ] && {
     run ip netns exec $NSPID $IPROUTE_PREFIX route delete default >/dev/null 2>&1 && true
     }
@@ -110,32 +119,45 @@ set_tunnel() {
     ROUTES=$5
 
     # Test IPv4/IPv6 
-    if [ $(echo $IPADDR | grep -q :) ]; 
+    if echo $IPADDR | grep -q :
     then
+        IPROUTE_PREFIX="ip -6"
         if [ $ACTION = ipip ]
         then
-            TUNL_NAME=ip6tnl0
+            TUNL_NAME=ip6tnl1 # TODO kernel 3.16 : output "No such device" and doesn't work with ip6tnl0
             TUNL_MODE=ip6ip6
         elif [ $ACTION = gre ]
         then
-            TUNL_NAME=ip6gre0
-            TUNL_MODE=sit
+            TUNL_NAME=ip6gre1
+            TUNL_MODE=ip6gre
         fi
-    else 
+    else
+        IPROUTE_PREFIX="ip -4"
         if [ $ACTION = ipip ]
         then
-            TUNL_NAME=tunl0
+            TUNL_NAME=tunl1
             TUNL_MODE=ipip
         elif [ $ACTION = gre ]
         then
-            TUNL_NAME=gre0
+            TUNL_NAME=gre1
             TUNL_MODE=gre
         fi
     fi
-    run ip netns exec $NSPID ip tunnel add $TUNL_NAME mode $TUNL_MODE dev $CONTAINER_IFNAME
+    # If the tunnel already exists, just address it (allows secondary address on tunneling interfaces)
+    run ip netns exec $NSPID $IPROUTE_PREFIX tunnel add $TUNL_NAME mode $TUNL_MODE dev $CONTAINER_IFNAME 3>&1 1>&2 2>&3 | grep -v "File exists" && true
+
+    # Patch for secondary IPv6 : add preffered_lft 0 cause you may not want the last added IP to be the source of the whole v6 traffic
+    # https://lists.debian.org/debian-isp/2011/05/msg00047.html
+    if [ "$IPROUTE_PREFIX" = "ip -6" ]
+    then
+        ip netns exec $NSPID $IPROUTE_PREFIX tunnel sh $TUNL_NAME > /dev/null 2>&1 && {
+            IPROUTE_OPTIONS="preferred_lft 0"
+        }
+    fi
+
     ADDRS=$(echo $IPADDR | tr ',' ' ')
-    for ADDR in $ADDRS; do 
-        run ip netns exec $NSPID ip addr add $IPADDR dev $TUNL_NAME
+    for ADDR in $ADDRS; do
+        run ip netns exec $NSPID $IPROUTE_PREFIX addr add $IPADDR dev $TUNL_NAME $IPROUTE_OPTIONS
     done
 
     [ "$ROUTES" ] && {
@@ -144,6 +166,7 @@ set_tunnel() {
             run ip netns exec $NSPID $IPROUTE_PREFIX route add $ROUTE via $GATEWAY dev $CONTAINER_IFNAME
         done
     }
+    run ip netns exec $NSPID $IPROUTE_PREFIX link set $TUNL_NAME up 
 }
 
 
@@ -209,12 +232,21 @@ while [ $# -gt 0 ]; do
                     shift
                     check_kernel_module ipip
                     check_kernel_module ip6_tunnel
+                    [ $# -eq 0 ] && {
+                        help
+                        exit 1
+                    }
                     IPADDR=$1
                     ;;
                 gre)
+                    shift
                     check_kernel_module gre
                     check_kernel_module ip6_gre
-                    IPADDR=$2
+                    [ $# -eq 0 ] && {
+                        help
+                        exit 1
+                    }
+                    IPADDR=$1
                     ;;
                 tc)
                     shift
@@ -464,19 +496,19 @@ ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID
             }
             run ip link set $IFNAME up 
             IFNAME=$IFNAME.$VLAN
-        } 
+        }
         GUEST_IFNAME=ph$NSPID$CONTAINER_IFNAME
         run ip link add link $IFNAME dev $GUEST_IFNAME mtu $MTU type macvlan mode bridge
         run ip link set $IFNAME up
     }
-  
+
     run ip link set $GUEST_IFNAME netns $NSPID
     run ip netns exec $NSPID ip link set $GUEST_IFNAME name $CONTAINER_IFNAME
     [ "$MACADDR" ] && run ip netns exec $NSPID ip link set dev $CONTAINER_IFNAME address $MACADDR
 }
 
 case "$ACTION" in
-    link) 
+    link)
         exit 0
         ;;
     dhcp)
@@ -487,20 +519,20 @@ case "$ACTION" in
             run ip netns exec $NSPID $DHCP_CLIENT -pf "/var/run/dhclient.$NSPID.pid" $CONTAINER_IFNAME
             kill "$(cat "/var/run/dhclient.$NSPID.pid")"
             rm "/var/run/dhclient.$NSPID.pid"
-        fi      
+        fi
         [ $DHCP_CLIENT = "dhcpcd"  ] && run ip netns exec $NSPID $DHCP_CLIENT -q $CONTAINER_IFNAME -h $GUESTNAME
         ;;
-    ip|sec_ip) 
+    ip|sec_ip)
         set_netns_ip $NSPID $CONTAINER_IFNAME $IPADDR $GATEWAY $ROUTES
         ;;
     ipip|gre)
         set_tunnel $ACTION $NSPID $CONTAINER_IFNAME $IPADDR $ROUTES
         ;;
-    tc) 
+    tc)
         run ip netns exec $NSPID tc $QOS
         ;;
-esac  
-        
+esac
+
 # Remove NSPID to avoid `ip netns` catch it.
 [ -f /var/run/netns/$NSPID ] && rm -f /var/run/netns/$NSPID
 exit 0

@@ -30,6 +30,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 * [Support Open vSwitch](#openvswitch)  
 * [Support Infiniband](#infiniband)
 * [Cleanup](#cleanup)  
+* [Debugging](#debug)
 * [Experimental](#experimental)  
 
 
@@ -125,7 +126,8 @@ Voilà!
 
 <a name="setting_internal"/>
 ### Setting container internal interface ##
-By default pipework creates a new interface `eth1` inside the container. In case you want to change this interface name like `eth2`, e.g., to have more than one interface set by pipework, use:
+By default pipework creates a new interface `eth1` inside the container. In case you want to 
+change this interface name like `eth2`, e.g., to have more than one interface set by pipework, use:
 
 `pipework br1 web1 -i eth2 ...`
 
@@ -315,7 +317,7 @@ ovs0 and attach the container to VLAN ID 10.
 <a name="ipv6"/>
 ### IPv6
 
-IPv6 adressing is also supported, using the same options : 
+IPv6 global scope adressing is also supported, using the same options : 
 
 	pipework eth0 eth0 $(docker run -d haproxy) -a ip 2001:db8::beef/64@2001:db8::1
 
@@ -374,6 +376,15 @@ the network interfaces are garbage collected. The interface in the container
 is automatically destroyed, and the interface in the docker host (part of the
 bridge) is then destroyed as well.
 
+<a name="debug"/>
+### Debugging
+
+2 switchs makes you able to debug some tedious situations : 
+
+-v logs every iproute2 calls
+
+-x enable shell debugging (similar to sh -x pipework ...)
+
 <a name="experimental"/>
 ### Experimental
 
@@ -381,8 +392,17 @@ TBD : test/kernel watch/...
 
 - Tunnel interfaces (GRE/IPIP/IP6_TUNNEL) 
 
-    pipework eth0 $(docker run -d haproxy) -a ipip 192.168.1.3/32 
-    pipework eth0 $(docker run -d haproxy) -a ipip 2001:db8::2/32 
+    pipework eth0 $(docker run -d haproxy) -i eth1 -a ipip 192.168.1.3
+    pipework eth0 $(docker run -d haproxy) -a ipip 2001:db8::2 
 
-- Clean OVS bridge
+If the container has more than one internal interface, specify the internal interface (-i) to attach 
+the tunnel to the good device
+
+No more driver/mode to remember (ipip, ip6_tunnel, ipip6, ip6ip6, gre, ip6_gre,...), pipeworks adapts itself 
+to the right situation regarding your adressing scheme (doing ipv4-in-ipv4 or ipv6-in-ipv6 encapsulation)
+
+Be careful about the MTU in these situations... (tunneling in the container over tunneling on the host may lead 
+to problems).
+
+- Clean OVS bridge unused ports
 
