@@ -9,17 +9,19 @@ help() {
     echo "  pipework <hostinterface> <guest> -a ipip <ipaddr>"
     echo "  pipework <hostinterface> <guest> -a gre <ipaddr> <remote>"
     echo "  pipework <hostinterface> <guest> -a dhcp"
+    echo "  pipework <hostinterface> <guest> -a tc (...)"
     echo "  pipework <hostinterface> <guest> -c"
     echo
     echo "The following options are available in any of the above commands: "
-    echo "    -i|--interface <name>  (Container interface name)"
-    echo "    -m|--mac <mac>         (MAC address to set)"
-    echo "    -M|--mtu <mtu>         (MTU to set on the container interface - be sure to have >= on host interface)"
-    echo "    -V|--vlan <id>         (VLAN ID/tag to use - only supported by Open vSwitch bridge or direct physical interface)"
-    echo "    -r|--route <network>   (Network routes to reach via container interface, comma-separated)"
-    echo "    -v|--verbose           (log activity)"
-    echo "    -x|--trace             (trace all bash commands)"
-    echo "    -h|--help              (print this help and exit)"
+    echo "    -a|--action <action> <spec>  (Requested action spec)"
+    echo "    -i|--interface <name>        (Container interface name)"
+    echo "    -m|--mac <mac>               (MAC address to set)"
+    echo "    -M|--mtu <mtu>               (MTU to set on the container interface - be sure to have >= on host interface)"
+    echo "    -V|--vlan <id>               (VLAN ID/tag to use - only supported by Open vSwitch bridge or direct physical interface)"
+    echo "    -r|--route <network>         (Network routes to reach via container interface, comma-separated)"
+    echo "    -v|--verbose                 (log activity)"
+    echo "    -x|--trace                   (trace all bash commands)"
+    echo "    -h|--help                    (print this help and exit)"
     exit 1
 }
 
@@ -217,6 +219,7 @@ while [ $# -gt 0 ]; do
                 tc)
                     shift
                     QOS=$@
+					shift $(($#-1))
                     ;;
             esac
             ;;
