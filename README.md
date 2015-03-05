@@ -26,6 +26,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 * [Virtual LAN (VLAN)](#vlan)  
 * [IPv6](#ipv6)
 * [Secondary addresses](#secondary)
+* [Traffic Control (QoS)](#traffic_control)
 * [Support Open vSwitch](#openvswitch)  
 * [Support Infiniband](#infiniband)
 * [Cleanup](#cleanup)  
@@ -164,7 +165,8 @@ after the IP address and subnet mask:
 <a name="route_internal"/>
 ### Setting routes on the internal interface
 
-If you add more than one internal interface, or perform specific use-cases, you may want to add other routes than the default one. 
+If you add more than one internal interface, or perform specific use-cases, like multicast routing 
+you may want to add other routes than the default one. 
 This could be performed by adding network and masks after the gateway (comma-separated)
 
     pipework br1 $CONTAINERID -a ip 192.168.4.25/20@192.168.4.1 -r 192.168.5.0/25,192.168.6.0/24
@@ -324,9 +326,24 @@ IPv6 adressing is also supported, using the same options :
 
 You can attach secondary addresses the container, using the action `sec_ip` instead of `ip`
 
-	pipework eth0 eth0 $(docker run -d haproxy) -a sec_ip 192.168.1.2/24
-	pipework eth0 eth0 $(docker run -d haproxy) -a sec_ip 2001:db8::beef/64
-	pipework eth0 eth0 $(docker run -d haproxy) -a sec_ip 2001:db8::face/64
+	pipework eth0 $(docker run -d haproxy) -a sec_ip 192.168.1.2/24
+	pipework eth0 $(docker run -d haproxy) -a sec_ip 2001:db8::beef/64
+	pipework eth0 $(docker run -d haproxy) -a sec_ip 2001:db8::face/64
+
+<a name="traffic_control"/>
+### Traffic Control (QoS)
+
+You can play with traffic control on an internal container interface, to emulate network 
+properties like bandwidth, packet drops, latency, protocol policing and marking, etc. 
+
+Here, we provide a simple wrapper around tc, so you can keep the control on all parameters
+
+    pipework eth0 $MYSQL -a tc qdisc add dev eth1 root netem loss 30%
+    pipework eth0 $MYSQL -a tc qdisc add dev eth1 root netem delay 100ms
+
+See `man tc` for more details
+
+**Note:** as it is a wrapper, be sure that all you pipework arguments are befoire `-a tc ...` 
 
 <a name="openvswitch"/>
 ### Support Open vSwitch
@@ -360,8 +377,12 @@ bridge) is then destroyed as well.
 <a name="experimental"/>
 ### Experimental
 
-TBD
+TBD : test/kernel watch/...
 
 - Tunnel interfaces (GRE/IPIP/IP6_TUNNEL) 
+
+    pipework eth0 $(docker run -d haproxy) -a ipip 192.168.1.3/32 
+    pipework eth0 $(docker run -d haproxy) -a ipip 2001:db8::2/32 
+
 - Clean OVS bridge
 
