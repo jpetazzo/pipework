@@ -30,7 +30,7 @@ fi
 
 [ "$IPADDR" ] || [ "$WAIT" ] || {
     echo "Syntax:"
-    echo "pipework <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
+    echo "pipework <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway][#default_gateway-table for policy routing] [macaddr][@vlan]"
     echo "pipework <hostinterface> [-i containerinterface] <guest> dhcp [macaddr][@vlan]"
     echo "pipework --wait [-i containerinterface]"
     exit 1
@@ -175,6 +175,15 @@ else
     then
         GATEWAY=$(echo $IPADDR | cut -d@ -f2)
         IPADDR=$(echo $IPADDR | cut -d@ -f1)
+    #    
+        if echo $IPADDR | grep -q "#"
+            TABLE=$(echo $IPADDR |cut -d# -f2| cut -d- -f2)
+            GATEWAY1=$(echo $IPADDR | cut -d# -f2| cut -d- -f1)
+            IPADDR1=$(echo $IPADDR | cut -d# -f1)
+        else
+            TABLE=
+        fi
+    #
     else
         GATEWAY=
     fi
@@ -269,6 +278,13 @@ then
     fi
     [ $DHCP_CLIENT = "dhcpcd"  ] && ip netns exec $NSPID $DHCP_CLIENT -q $CONTAINER_IFNAME -h $GUESTNAME
 else
+    if [ $TABLE ]; then
+        ip netns exec $NSPID ip addr add $IPADDR1 dev $CONTAINER_IFNAME
+        ip netns exec $NSPID ip link set $CONTAINER_IFNAME up
+        ip netns exec $NSPID ip rule add from $IPADDR1 table $TABLE pref $TABLE
+        ip netns exec $NSPID ip route add table $TABLE via $GATEWAY1
+    fi
+
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
     [ "$GATEWAY" ] && {
 	ip netns exec $NSPID ip route delete default >/dev/null 2>&1 && true
