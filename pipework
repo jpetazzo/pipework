@@ -94,59 +94,59 @@ CONTAINER_IFNAME=${CONTAINER_IFNAME:-eth1}
 }
 
 [ $IFTYPE = ipoib ] && [ $MACADDR ] && {
-	echo "MACADDR configuration unsupported for IPoIB interfaces."
-	exit 1
-}
-
-# Second step: find the guest (for now, we only support LXC containers)
-while read dev mnt fstype options dump fsck
-do
-    [ "$fstype" != "cgroup" ] && continue
-    echo $options | grep -qw devices || continue
-    CGROUPMNT=$mnt
-done < /proc/mounts
-
-[ "$CGROUPMNT" ] || {
-    echo "Could not locate cgroup mount point."
+    echo "MACADDR configuration unsupported for IPoIB interfaces."
     exit 1
 }
 
+# Second step: find the guest (for now, we only support LXC containers)
+#while read dev mnt fstype options dump fsck
+#do
+#    [ "$fstype" != "cgroup" ] && continue
+#    echo $options | grep -qw devices || continue
+#    CGROUPMNT=$mnt
+#done < /proc/mounts
+#
+#[ "$CGROUPMNT" ] || {
+#    echo "Could not locate cgroup mount point."
+#    exit 1
+#}
+CGROUPMNT="/sys/fs/cgroup/systemd"
 # Try to find a cgroup matching exactly the provided name.
 N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
 case "$N" in
     0)
-	# If we didn't find anything, try to lookup the container with Docker.
-	if which docker >/dev/null
-	then
+    # If we didn't find anything, try to lookup the container with Docker.
+    if which docker >/dev/null
+    then
         RETRIES=3
         while [ $RETRIES -gt 0 ]; do
-      	    DOCKERPID=$(docker inspect --format='{{ .State.Pid }}' $GUESTNAME)
+            DOCKERPID=$(docker inspect --format='{{ .State.Pid }}' $GUESTNAME)
             [ $DOCKERPID != 0 ] && break
             sleep 1
             RETRIES=$((RETRIES - 1))
         done
 
         [ "$DOCKERPID" = 0 ] && {
-      		echo "Docker inspect returned invalid PID 0"
-    		exit 1
-      	}
+            echo "Docker inspect returned invalid PID 0"
+            exit 1
+        }
 
         [ "$DOCKERPID" = "<no value>" ] && {
-      		echo "Container $GUESTNAME not found, and unknown to Docker."
-    		exit 1
-      	}
-	else
-	    echo "Container $GUESTNAME not found, and Docker not installed."
-	    exit 1
-	fi
-	;;
+            echo "Container $GUESTNAME not found, and unknown to Docker."
+            exit 1
+        }
+    else
+        echo "Container $GUESTNAME not found, and Docker not installed."
+        exit 1
+    fi
+    ;;
     1)
-	true
-	;;
+    true
+    ;;
     *)
-	echo "Found more than one container matching $GUESTNAME."
-	exit 1
-	;;
+    echo "Found more than one container matching $GUESTNAME."
+    exit 1
+    ;;
 esac
 
 if [ "$IPADDR" = "dhcp" ]
@@ -160,32 +160,34 @@ then
         }
     done
     [ -z $DHCP_CLIENT ] && {
-    	echo "You asked for DHCP; but no DHCP client could be found."
-    	exit 1
+        echo "You asked for DHCP; but no DHCP client could be found."
+        exit 1
     }
 else
     # Check if a subnet mask was provided.
     echo $IPADDR | grep -q / || {
-	echo "The IP address should include a netmask."
-	echo "Maybe you meant $IPADDR/24 ?"
-	exit 1
+    echo "The IP address should include a netmask."
+    echo "Maybe you meant $IPADDR/24 ?"
+    exit 1
     }
     # Check if a gateway address was provided.
     if echo $IPADDR | grep -q @
     then
         GATEWAY=$(echo $IPADDR | cut -d@ -f2)
         IPADDR=$(echo $IPADDR | cut -d@ -f1)
-    #    
-        if echo $IPADDR | grep -q "#"
+    elif echo $IPADDR | grep -q "#"
+    then
+    echo $IPADDR | grep -q "#"
+    
             TABLE=$(echo $IPADDR |cut -d# -f2| cut -d- -f2)
             GATEWAY1=$(echo $IPADDR | cut -d# -f2| cut -d- -f1)
             IPADDR1=$(echo $IPADDR | cut -d# -f1)
-        else
-            TABLE=
-        fi
-    #
+        echo $TABLE
+        echo $GATEWAY1
+        echo $IPADDR1
     else
         GATEWAY=
+    TABLE=
     fi
 fi
 
@@ -283,18 +285,19 @@ else
         ip netns exec $NSPID ip link set $CONTAINER_IFNAME up
         ip netns exec $NSPID ip rule add from $IPADDR1 table $TABLE pref $TABLE
         ip netns exec $NSPID ip route add table $TABLE via $GATEWAY1
-    fi
-
+    else
     ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
-    [ "$GATEWAY" ] && {
-	ip netns exec $NSPID ip route delete default >/dev/null 2>&1 && true
-    }
-    ip netns exec $NSPID ip link set $CONTAINER_IFNAME up
-    [ "$GATEWAY" ] && {
-	ip netns exec $NSPID ip route get $GATEWAY >/dev/null 2>&1 || \
-		ip netns exec $NSPID ip route add $GATEWAY/32 dev $CONTAINER_IFNAME
-	ip netns exec $NSPID ip route replace default via $GATEWAY
-    }
+        [ "$GATEWAY" ] && {
+        ip netns exec $NSPID ip route delete default >/dev/null 2>&1 && true
+        }
+        ip netns exec $NSPID ip link set $CONTAINER_IFNAME up
+        [ "$GATEWAY" ] && {
+        ip netns exec $NSPID ip route get $GATEWAY >/dev/null 2>&1 || \
+                ip netns exec $NSPID ip route add $GATEWAY/32 dev $CONTAINER_IFNAME
+        ip netns exec $NSPID ip route replace default via $GATEWAY
+        }
+
+    fi
 fi
 
 # Give our ARP neighbors a nudge about the new interface
@@ -309,3 +312,4 @@ fi
 # Remove NSPID to avoid `ip netns` catch it.
 [ -f /var/run/netns/$NSPID ] && rm -f /var/run/netns/$NSPID
 exit 0
+
