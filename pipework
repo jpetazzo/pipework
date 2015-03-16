@@ -182,9 +182,6 @@ else
             TABLE=$(echo $IPADDR |cut -d# -f2| cut -d- -f2)
             GATEWAY1=$(echo $IPADDR | cut -d# -f2| cut -d- -f1)
             IPADDR1=$(echo $IPADDR | cut -d# -f1)
-        echo $TABLE
-        echo $GATEWAY1
-        echo $IPADDR1
     else
         GATEWAY=
     TABLE=
