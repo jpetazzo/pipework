@@ -82,7 +82,7 @@ fi
 CONTAINER_IFNAME=${CONTAINER_IFNAME:-eth1}
 
 [ "$WAIT" ] && {
-  while ! grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null
+  while ! ifconfig eth1 2>/dev/null | grep -q 'inet addr:'
   do sleep 1
   done
   exit 0
