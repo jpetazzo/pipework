@@ -99,18 +99,18 @@ CONTAINER_IFNAME=${CONTAINER_IFNAME:-eth1}
 }
 
 # Second step: find the guest (for now, we only support LXC containers)
-#while read dev mnt fstype options dump fsck
-#do
-#    [ "$fstype" != "cgroup" ] && continue
-#    echo $options | grep -qw devices || continue
-#    CGROUPMNT=$mnt
-#done < /proc/mounts
-#
-#[ "$CGROUPMNT" ] || {
-#    echo "Could not locate cgroup mount point."
-#    exit 1
-#}
-CGROUPMNT="/sys/fs/cgroup/systemd"
+while read dev mnt fstype options dump fsck
+do
+    [ "$fstype" != "cgroup" ] && continue
+    echo $options | grep -qw devices || continue
+    CGROUPMNT=$mnt
+done < /proc/mounts
+
+[ "$CGROUPMNT" ] || {
+    echo "Could not locate cgroup mount point."
+    exit 1
+}
+#CGROUPMNT="/sys/fs/cgroup/systemd"
 # Try to find a cgroup matching exactly the provided name.
 N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
 case "$N" in
