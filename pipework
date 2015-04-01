@@ -53,6 +53,9 @@ if [ "$RESTORE_FILE" ]; then
                 $0 $SAVED_LINE
             fi
         done < $RESTORE_FILE
+    else
+        echo "Restore file doesn't exists."
+        exit 1
     fi
     exit 0
 fi
