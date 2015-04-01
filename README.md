@@ -25,6 +25,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 * [Virtual LAN (VLAN)](#vlan)  
 * [Support Open vSwitch](#openvswitch)  
 * [Support Infiniband](#infiniband)
+* [Save and restore configuration](#save_restore)
 * [Cleanup](#cleanup)  
 
 
@@ -325,7 +326,16 @@ from the host.
 
 To provide infiniband to multiple containers, use SR-IOV and pass
 the virtual function devices to the containers.
-  
+
+<a name="save_restore"/>
+### Save and restore configuration
+
+You can also save and restore the configuration in a specific configuration file
+using the `--save <file>` option and `--restore <file>` option, respectively.
+
+These options can be used to reload a given set of network configuration for example
+using the `lxc.network.script.up` hooks.
+
 <a name="cleanup"/>
 ### Cleanup
 
