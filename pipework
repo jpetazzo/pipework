@@ -5,6 +5,13 @@ case "$1" in
     --wait)
       WAIT=1
       ;;
+    --save)
+      SAVE_FILE=$2
+      shift 2
+      ;;
+    --restore)
+      RESTORE_FILE=$2
+      ;;
 esac
 
 IFNAME=$1
@@ -28,16 +35,30 @@ else
   VLAN=
 fi
 
-[ "$IPADDR" ] || [ "$WAIT" ] || {
+[ "$IPADDR" ] || [ "$WAIT" ] || [ "$RESTORE_FILE" ] || {
     echo "Syntax:"
-    echo "pipework <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
-    echo "pipework <hostinterface> [-i containerinterface] <guest> dhcp [macaddr][@vlan]"
+    echo "pipework [--save <file>] <hostinterface> [-i containerinterface] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
+    echo "pipework [--save <file>] <hostinterface> [-i containerinterface] <guest> dhcp [macaddr][@vlan]"
+    echo "pipework [--restore <file>]"
     echo "pipework --wait [-i containerinterface]"
     exit 1
 }
 
-# First step: determine type of first argument (bridge, physical interface...), skip if --wait set
-if [ -z "$WAIT" ]; then 
+# determine if we want to restore a rule set (--restore <file>)
+if [ "$RESTORE_FILE" ]; then
+    if [ -f "$RESTORE_FILE" ]; then
+        while read -r SAVED_LINE; do
+            #ensure that this line is not a comment
+            if [ "`expr index \"$SAVED_LINE\" \\\#`" != 1 ]; then
+                $0 $SAVED_LINE
+            fi
+        done < $RESTORE_FILE
+    fi
+    exit 0
+fi
+
+# First step: determine type of first argument (bridge, physical interface...), skip if --wait is set
+if [ -z "$WAIT" ]; then
     if [ -d /sys/class/net/$IFNAME ]
     then
         if [ -d /sys/class/net/$IFNAME/bridge ]
@@ -97,6 +118,18 @@ CONTAINER_IFNAME=${CONTAINER_IFNAME:-eth1}
 	echo "MACADDR configuration unsupported for IPoIB interfaces."
 	exit 1
 }
+
+# determine if we want to save this rules (--save <file>)
+if [ "$SAVE_FILE" ]; then
+    if [ ! -f "$SAVE_FILE" ]; then
+        echo "#!/usr/local/bin/pipework" > $SAVE_FILE
+    fi
+    if [ -n "$VLAN" ]; then
+        echo "$IFNAME -i $CONTAINER_IFNAME $GUESTNAME $IPADDR ${MACADDR}@$VLAN" >> $SAVE_FILE
+    else
+        echo "$IFNAME -i $CONTAINER_IFNAME $GUESTNAME $IPADDR ${MACADDR}" >> $SAVE_FILE
+    fi
+fi
 
 # Second step: find the guest (for now, we only support LXC containers)
 while read dev mnt fstype options dump fsck
