@@ -241,6 +241,7 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
 
 # If it's a physical interface, create a macvlan subinterface
 [ $IFTYPE = phys ] && {
+    ifconfig $IFNAME promisc # for vmware
     [ "$VLAN" ] && {
         [ ! -d /sys/class/net/$IFNAME.$VLAN ] && {
             ip link add link $IFNAME name $IFNAME.$VLAN mtu $MTU type vlan id $VLAN
