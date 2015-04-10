@@ -20,13 +20,13 @@ GUESTNAME=$2
 IPADDR=$3
 MACADDR=$4
 
-if echo $MACADDR | grep -q @
-then
-  VLAN=$(echo $MACADDR | cut -d@ -f2)
-  MACADDR=$(echo $MACADDR | cut -d@ -f1)
-else
-  VLAN=
-fi
+case "$MACADDR" in
+    *@*)
+        VLAN="${MACADDR#*@}" VLAN="${VLAN%%@*}"
+        MACADDR="${MACADDR%%@*}"
+        ;;
+    *) VLAN=;;
+esac
 
 [ "$IPADDR" ] || [ "$WAIT" ] || {
     echo "Syntax:"
@@ -171,13 +171,13 @@ else
 	exit 1
     }
     # Check if a gateway address was provided.
-    if echo $IPADDR | grep -q @
-    then
-        GATEWAY=$(echo $IPADDR | cut -d@ -f2)
-        IPADDR=$(echo $IPADDR | cut -d@ -f1)
-    else
-        GATEWAY=
-    fi
+    case "$IPADDR" in
+        *@*)
+            GATEWAY="${IPADDR#*@}" GATEWAY="${GATEWAY%%@*}"
+            IPADDR="${IPADDR%%@*}"
+            ;;
+        *) GATEWAY=;;
+    esac
 fi
 
 if [ $DOCKERPID ]; then
