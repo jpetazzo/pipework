@@ -51,7 +51,8 @@ if [ -z "$WAIT" ]; then
         elif [ $(cat /sys/class/net/$IFNAME/type) -eq 32 ]; # Infiniband IPoIB interface type 32
         then
             IFTYPE=ipoib
-            # The IPoIB kernel module is fussy, set device name to ib0 if not overridden
+            PKEY=$VLAN
+            # The IPoIB kernel module is fussy, set device name to ib0 if not specified
             CONTAINER_IFNAME=${CONTAINER_IFNAME:-ib0}
         else IFTYPE=phys
         fi
@@ -230,15 +231,6 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
     ip link set $LOCAL_IFNAME up
 }
 
-# Note: if no container interface name was specified, pipework will default to ib0
-# Note: no macvlan subinterface or ethernet bridge can be created against an 
-# ipoib interface. Infiniband is not ethernet. ipoib is an IP layer for it.
-# To provide additional ipoib interfaces to containers use SR-IOV and pipework 
-# to assign them.
-[ $IFTYPE = ipoib ] && {
-  GUEST_IFNAME=$CONTAINER_IFNAME
-}
-
 # If it's a physical interface, create a macvlan subinterface
 [ $IFTYPE = phys ] && {
     [ "$VLAN" ] && {
@@ -252,6 +244,19 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
     GUEST_IFNAME=ph$NSPID$CONTAINER_IFNAME
     ip link add link $IFNAME dev $GUEST_IFNAME mtu $MTU type macvlan mode bridge
     ip link set $IFNAME up
+}
+
+# If it's an IPoIB interface, create a virtual IPoIB interface (IPoIB equivalent of a macvlan)
+[ $IFTYPE = ipoib ] && {
+    GUEST_IFNAME=$IFNAME.$NSPID
+
+    # If a partition key is provided, use it
+    [ "$PKEY" ] && {
+        GUEST_IFNAME=$IFNAME.$PKEY.$NSPID
+        PKEY="pkey $PKEY"
+    }
+    ip link add link $IFNAME name $GUEST_IFNAME type ipoib $PKEY
+    IFNAME=$GUEST_IFNAME
 }
 
 ip link set $GUEST_IFNAME netns $NSPID
@@ -281,13 +286,16 @@ else
     }
 fi
 
-# Give our ARP neighbors a nudge about the new interface
-if which arping > /dev/null 2>&1
-then
-    IPADDR=$(echo $IPADDR | cut -d/ -f1)
-    ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR > /dev/null 2>&1 || true
-else
-    echo "Warning: arping not found; interface may not be immediately reachable"
+if [ $IFTYPE != "ipoib" ] 
+then   
+    # Give our ARP neighbors a nudge about the new interface
+    if which arping > /dev/null 2>&1
+    then
+        IPADDR=$(echo $IPADDR | cut -d/ -f1)
+        ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR > /dev/null 2>&1 || true
+    else
+        echo "Warning: arping not found; interface may not be immediately reachable"
+    fi
 fi
 
 # Remove NSPID to avoid `ip netns` catch it.
