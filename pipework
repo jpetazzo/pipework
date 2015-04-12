@@ -98,56 +98,77 @@ CONTAINER_IFNAME=${CONTAINER_IFNAME:-eth1}
 	exit 1
 }
 
-# Second step: find the guest (for now, we only support LXC containers)
-while read dev mnt fstype options dump fsck
-do
-    [ "$fstype" != "cgroup" ] && continue
-    echo $options | grep -qw devices || continue
-    CGROUPMNT=$mnt
-done < /proc/mounts
+# Second step: find the guest (for now, LXC containers, docker containers, and
+# raw network namespaces are supported).
+if ip netns list | grep -qw $GUESTNAME
+then
+  # If the guest name corresponds to the name of a namespace, use that.
+  NS=$GUESTNAME
+else
+  while read dev mnt fstype options dump fsck
+  do
+      [ "$fstype" != "cgroup" ] && continue
+      echo $options | grep -qw devices || continue
+      CGROUPMNT=$mnt
+  done < /proc/mounts
 
-[ "$CGROUPMNT" ] || {
-    echo "Could not locate cgroup mount point."
-    exit 1
-}
+  [ "$CGROUPMNT" ] || {
+      echo "Could not locate cgroup mount point."
+      exit 1
+  }
 
-# Try to find a cgroup matching exactly the provided name.
-N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
-case "$N" in
-    0)
-	# If we didn't find anything, try to lookup the container with Docker.
-	if which docker >/dev/null
-	then
-        RETRIES=3
-        while [ $RETRIES -gt 0 ]; do
-      	    DOCKERPID=$(docker inspect --format='{{ .State.Pid }}' $GUESTNAME)
-            [ $DOCKERPID != 0 ] && break
-            sleep 1
-            RETRIES=$((RETRIES - 1))
-        done
+  # Try to find a cgroup matching exactly the provided name.
+  N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
+  case "$N" in
+      0)
+          # If we didn't find anything, try to lookup the container with Docker.
+          if which docker >/dev/null
+          then
+          RETRIES=3
+          while [ $RETRIES -gt 0 ]; do
+              DOCKERPID=$(docker inspect --format='{{ .State.Pid }}' $GUESTNAME)
+              [ $DOCKERPID != 0 ] && break
+              sleep 1
+              RETRIES=$((RETRIES - 1))
+          done
 
-        [ "$DOCKERPID" = 0 ] && {
-      		echo "Docker inspect returned invalid PID 0"
-    		exit 1
-      	}
+          [ "$DOCKERPID" = 0 ] && {
+                  echo "Docker inspect returned invalid PID 0"
+                  exit 1
+          }
 
-        [ "$DOCKERPID" = "<no value>" ] && {
-      		echo "Container $GUESTNAME not found, and unknown to Docker."
-    		exit 1
-      	}
-	else
-	    echo "Container $GUESTNAME not found, and Docker not installed."
-	    exit 1
-	fi
-	;;
-    1)
-	true
-	;;
-    *)
-	echo "Found more than one container matching $GUESTNAME."
-	exit 1
-	;;
-esac
+          [ "$DOCKERPID" = "<no value>" ] && {
+                  echo "Container $GUESTNAME not found, and unknown to Docker."
+                  exit 1
+          }
+          else
+              echo "Container $GUESTNAME not found, and Docker not installed."
+              exit 1
+          fi
+          ;;
+      1)
+          true
+          ;;
+      *)
+          echo "Found more than one container matching $GUESTNAME."
+          exit 1
+          ;;
+  esac
+
+  if [ $DOCKERPID ]; then
+    NS=$DOCKERPID
+  else
+    NS=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/tasks)
+    [ "$NS" ] || {
+        echo "Could not find a process inside container $GUESTNAME."
+        exit 1
+    }
+  fi
+
+  [ ! -d /var/run/netns ] && mkdir -p /var/run/netns
+  [ -f /var/run/netns/$NS ] && rm -f /var/run/netns/$NS
+  ln -s /proc/$NS/ns/net /var/run/netns/$NS
+fi
 
 if [ "$IPADDR" = "dhcp" ]
 then
@@ -180,16 +201,6 @@ else
     esac
 fi
 
-if [ $DOCKERPID ]; then
-  NSPID=$DOCKERPID
-else
-  NSPID=$(head -n 1 $(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/tasks)
-  [ "$NSPID" ] || {
-      echo "Could not find a process inside container $GUESTNAME."
-      exit 1
-  }
-fi
-
 # Check if an incompatible VLAN device already exists
 [ $IFTYPE = phys ] && [ "$VLAN" ] && [ -d /sys/class/net/$IFNAME.VLAN ] && {
     [ -z "$(ip -d link show $IFNAME.$VLAN | grep "vlan.*id $VLAN")" ] && {
@@ -197,10 +208,6 @@ fi
         exit 1
     }
 }
-
-[ ! -d /var/run/netns ] && mkdir -p /var/run/netns
-[ -f /var/run/netns/$NSPID ] && rm -f /var/run/netns/$NSPID
-ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID
 
 # Check if we need to create a bridge.
 [ $IFTYPE = bridge ] && [ ! -d /sys/class/net/$IFNAME ] && {
@@ -216,8 +223,8 @@ ln -s /proc/$NSPID/ns/net /var/run/netns/$NSPID
 MTU=$(ip link show $IFNAME | awk '{print $5}')
 # If it's a bridge, we need to create a veth pair
 [ $IFTYPE = bridge ] && {
-    LOCAL_IFNAME="v${CONTAINER_IFNAME}pl${NSPID}"
-    GUEST_IFNAME="v${CONTAINER_IFNAME}pg${NSPID}"
+    LOCAL_IFNAME="v${CONTAINER_IFNAME}pl${NS}"
+    GUEST_IFNAME="v${CONTAINER_IFNAME}pg${NS}"
     ip link add name $LOCAL_IFNAME mtu $MTU type veth peer name $GUEST_IFNAME mtu $MTU
     case "$BRTYPE" in
         linux)
@@ -249,35 +256,35 @@ MTU=$(ip link show $IFNAME | awk '{print $5}')
         ip link set $IFNAME up
         IFNAME=$IFNAME.$VLAN
     }
-    GUEST_IFNAME=ph$NSPID$CONTAINER_IFNAME
+    GUEST_IFNAME=ph$NS$CONTAINER_IFNAME
     ip link add link $IFNAME dev $GUEST_IFNAME mtu $MTU type macvlan mode bridge
     ip link set $IFNAME up
 }
 
-ip link set $GUEST_IFNAME netns $NSPID
-ip netns exec $NSPID ip link set $GUEST_IFNAME name $CONTAINER_IFNAME
-[ "$MACADDR" ] && ip netns exec $NSPID ip link set dev $CONTAINER_IFNAME address $MACADDR
+ip link set $GUEST_IFNAME netns $NS
+ip netns exec $NS ip link set $GUEST_IFNAME name $CONTAINER_IFNAME
+[ "$MACADDR" ] && ip netns exec $NS ip link set dev $CONTAINER_IFNAME address $MACADDR
 if [ "$IPADDR" = "dhcp" ]
 then
-    [ $DHCP_CLIENT = "udhcpc"  ] && ip netns exec $NSPID $DHCP_CLIENT -qi $CONTAINER_IFNAME -x hostname:$GUESTNAME
+    [ $DHCP_CLIENT = "udhcpc"  ] && ip netns exec $NS $DHCP_CLIENT -qi $CONTAINER_IFNAME -x hostname:$GUESTNAME
     if [ $DHCP_CLIENT = "dhclient"  ]
     then
         # kill dhclient after get ip address to prevent device be used after container close
-        ip netns exec $NSPID $DHCP_CLIENT -pf "/var/run/dhclient.$NSPID.pid" $CONTAINER_IFNAME
-        kill "$(cat "/var/run/dhclient.$NSPID.pid")"
-        rm "/var/run/dhclient.$NSPID.pid"
+        ip netns exec $NS $DHCP_CLIENT -pf "/var/run/dhclient.$NS.pid" $CONTAINER_IFNAME
+        kill "$(cat "/var/run/dhclient.$NS.pid")"
+        rm "/var/run/dhclient.$NS.pid"
     fi
-    [ $DHCP_CLIENT = "dhcpcd"  ] && ip netns exec $NSPID $DHCP_CLIENT -q $CONTAINER_IFNAME -h $GUESTNAME
+    [ $DHCP_CLIENT = "dhcpcd"  ] && ip netns exec $NS $DHCP_CLIENT -q $CONTAINER_IFNAME -h $GUESTNAME
 else
-    ip netns exec $NSPID ip addr add $IPADDR dev $CONTAINER_IFNAME
+    ip netns exec $NS ip addr add $IPADDR dev $CONTAINER_IFNAME
     [ "$GATEWAY" ] && {
-	ip netns exec $NSPID ip route delete default >/dev/null 2>&1 && true
+	ip netns exec $NS ip route delete default >/dev/null 2>&1 && true
     }
-    ip netns exec $NSPID ip link set $CONTAINER_IFNAME up
+    ip netns exec $NS ip link set $CONTAINER_IFNAME up
     [ "$GATEWAY" ] && {
-	ip netns exec $NSPID ip route get $GATEWAY >/dev/null 2>&1 || \
-		ip netns exec $NSPID ip route add $GATEWAY/32 dev $CONTAINER_IFNAME
-	ip netns exec $NSPID ip route replace default via $GATEWAY
+	ip netns exec $NS ip route get $GATEWAY >/dev/null 2>&1 || \
+		ip netns exec $NS ip route add $GATEWAY/32 dev $CONTAINER_IFNAME
+	ip netns exec $NS ip route replace default via $GATEWAY
     }
 fi
 
@@ -285,11 +292,12 @@ fi
 if which arping > /dev/null 2>&1
 then
     IPADDR=$(echo $IPADDR | cut -d/ -f1)
-    ip netns exec $NSPID arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR > /dev/null 2>&1 || true
+    ip netns exec $NS arping -c 1 -A -I $CONTAINER_IFNAME $IPADDR > /dev/null 2>&1 || true
 else
     echo "Warning: arping not found; interface may not be immediately reachable"
 fi
 
-# Remove NSPID to avoid `ip netns` catch it.
-[ -f /var/run/netns/$NSPID ] && rm -f /var/run/netns/$NSPID
+# Remove NS to avoid `ip netns` seeing it, unless we're working with namespaces
+# directly.
+[ $GUESTNAME != $NS ] && [ -f /var/run/netns/$NS ] && rm -f /var/run/netns/$NS
 exit 0
