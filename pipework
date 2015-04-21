@@ -242,6 +242,16 @@ MTU=$(ip link show "$IFNAME" | awk '{print $5}')
     LOCAL_IFNAME="v${CONTAINER_IFNAME}pl${NSPID}"
   fi
   GUEST_IFNAME="v${CONTAINER_IFNAME}pg${NSPID}"
+  # Does the link already exist?
+  if ip link show "$LOCAL_IFNAME" >/dev/null 2>&1; then
+    # link exists, is it in use?
+    if ip link show "$LOCAL_IFNAME" up | grep -q "UP"; then
+      echo "Link $LOCAL_IFNAME exists and is up"
+      exit 1
+    fi
+    # delete the link so we can re-add it afterwards
+    ip link del "$LOCAL_IFNAME"
+  fi
   ip link add name "$LOCAL_IFNAME" mtu "$MTU" type veth peer name "$GUEST_IFNAME" mtu "$MTU"
   case "$BRTYPE" in
     linux)
