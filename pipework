@@ -90,8 +90,13 @@ fi
 CONTAINER_IFNAME=${CONTAINER_IFNAME:-eth1}
 
 [ "$WAIT" ] && {
-  while ! grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null
-  do sleep 1
+  while true; do
+    # This first method works even without `ip` or `ifconfig` installed,
+    # but doesn't work on older kernels (e.g. CentOS 6.X). See #128.
+    grep -q ^1$ /sys/class/net/$CONTAINER_IFNAME/carrier 2>/dev/null && break
+    # This method hopefully works on those older kernels.
+    ip link ls dev $CONTAINER_IFNAME >/dev/null 2>&1 && break
+    sleep 1
   done
   exit 0
 }
