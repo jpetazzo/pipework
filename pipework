@@ -49,6 +49,17 @@ installed () {
   command -v "$1" >/dev/null 2>&1
 }
 
+# Google Styleguide says error messages should go to standard error.
+warn () {
+  echo "$@" >&2
+}
+die () {
+  status="$1"
+  shift
+  warn "$@"
+  exit "$status"
+}
+
 # First step: determine type of first argument (bridge, physical interface...),
 # Unless "--wait" is set (then skip the whole section)
 if [ -z "$WAIT" ]; then 
@@ -74,16 +85,12 @@ if [ -z "$WAIT" ]; then
         ;;
       ovs*)
         if ! installed ovs-vsctl; then
-          echo "Need OVS installed on the system to create an ovs bridge"
-          exit 1
+          die 1 "Need OVS installed on the system to create an ovs bridge"
         fi
         IFTYPE=bridge
         BRTYPE=openvswitch
         ;;
-      *)
-        echo "I do not know how to setup interface $IFNAME."
-        exit 1
-        ;;
+      *) die 1 "I do not know how to setup interface $IFNAME." ;;
     esac
   fi
 fi
@@ -104,13 +111,11 @@ CONTAINER_IFNAME=${CONTAINER_IFNAME:-eth1}
 }
 
 [ "$IFTYPE" = bridge ] && [ "$BRTYPE" = linux ] && [ "$VLAN" ] && {
-  echo "VLAN configuration currently unsupported for Linux bridge."
-  exit 1
+  die 1 "VLAN configuration currently unsupported for Linux bridge."
 }
 
 [ "$IFTYPE" = ipoib ] && [ "$MACADDR" ] && {
-  echo "MACADDR configuration unsupported for IPoIB interfaces."
-  exit 1
+  die 1 "MACADDR configuration unsupported for IPoIB interfaces."
 }
 
 # Second step: find the guest (for now, we only support LXC containers)
@@ -121,8 +126,7 @@ while read _ mnt fstype options _; do
 done < /proc/mounts
 
 [ "$CGROUPMNT" ] || {
-    echo "Could not locate cgroup mount point."
-    exit 1
+    die 1 "Could not locate cgroup mount point."
 }
 
 # Try to find a cgroup matching exactly the provided name.
@@ -139,27 +143,19 @@ case "$N" in
         RETRIES=$((RETRIES - 1))
       done
 
-     [ "$DOCKERPID" = 0 ] && {
-       echo "Docker inspect returned invalid PID 0"
-       exit 1
-     }
+      [ "$DOCKERPID" = 0 ] && {
+        die 1 "Docker inspect returned invalid PID 0"
+      }
 
-        [ "$DOCKERPID" = "<no value>" ] && {
-          echo "Container $GUESTNAME not found, and unknown to Docker."
-        exit 1
-        }
-  else
-      echo "Container $GUESTNAME not found, and Docker not installed."
-      exit 1
-  fi
-  ;;
-    1)
-  true
-  ;;
-    *)
-  echo "Found more than one container matching $GUESTNAME."
-  exit 1
-  ;;
+      [ "$DOCKERPID" = "<no value>" ] && {
+        die 1 "Container $GUESTNAME not found, and unknown to Docker."
+      }
+    else
+      die 1 "Container $GUESTNAME not found, and Docker not installed."
+    fi
+    ;;
+  1) true ;;
+  *) die 1 "Found more than one container matching $GUESTNAME." ;;
 esac
 
 if [ "$IPADDR" = "dhcp" ]; then
@@ -172,16 +168,17 @@ if [ "$IPADDR" = "dhcp" ]; then
     }
   done
   [ -z "$DHCP_CLIENT" ] && {
-    echo "You asked for DHCP; but no DHCP client could be found."
-    exit 1
+    die 1 "You asked for DHCP; but no DHCP client could be found."
   }
 else
   # Check if a subnet mask was provided.
-  echo "$IPADDR" | grep -q / || {
-    echo "The IP address should include a netmask."
-    echo "Maybe you meant $IPADDR/24 ?"
-    exit 1
-  }
+  case "$IPADDR" in
+    */*) : ;;
+    *)
+      warn "The IP address should include a netmask."
+      die 1 "Maybe you meant $IPADDR/24 ?"
+      ;;
+  esac
   # Check if a gateway address was provided.
   case "$IPADDR" in
     *@*)
@@ -199,16 +196,14 @@ if [ "$DOCKERPID" ]; then
 else
   NSPID=$(head -n 1 "$(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/tasks")
   [ "$NSPID" ] || {
-    echo "Could not find a process inside container $GUESTNAME."
-    exit 1
+    die 1 "Could not find a process inside container $GUESTNAME."
   }
 fi
 
 # Check if an incompatible VLAN device already exists
 [ "$IFTYPE" = phys ] && [ "$VLAN" ] && [ -d "/sys/class/net/$IFNAME.VLAN" ] && {
   ip -d link show "$IFNAME.$VLAN" | grep -q "vlan.*id $VLAN" || {
-    echo "$IFNAME.VLAN already exists but is not a VLAN device for tag $VLAN"
-    exit 1
+    die 1 "$IFNAME.VLAN already exists but is not a VLAN device for tag $VLAN"
   }
 }
 
