@@ -233,7 +233,7 @@ MTU=$(ip link show "$IFNAME" | awk '{print $5}')
       (ip link set "$LOCAL_IFNAME" master "$IFNAME" > /dev/null 2>&1) || (brctl addif "$IFNAME" "$LOCAL_IFNAME")
       ;;
     openvswitch)
-      ovs-vsctl add-port "$IFNAME" "$LOCAL_IFNAME" "${VLAN:+tag=$VLAN}"
+      ovs-vsctl add-port "$IFNAME" "$LOCAL_IFNAME" ${VLAN:+tag="$VLAN"}
       ;;
   esac
   ip link set "$LOCAL_IFNAME" up
