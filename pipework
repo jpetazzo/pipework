@@ -18,6 +18,12 @@ if [ "$2" = "-i" ]; then
   shift 2
 fi
 
+HOST_NAME_ARG=""
+if [ "$2" == "-H" ]; then
+  HOST_NAME_ARG="-H $3"
+  shift 2
+fi
+
 GUESTNAME=$2
 IPADDR=$3
 MACADDR=$4
@@ -270,7 +276,7 @@ then
   [ "$DHCP_CLIENT" = "udhcpc"  ] && ip netns exec "$NSPID" "$DHCP_CLIENT" -qi "$CONTAINER_IFNAME" -x "hostname:$GUESTNAME"
   if [ "$DHCP_CLIENT" = "dhclient"  ]; then
     # kill dhclient after get ip address to prevent device be used after container close
-    ip netns exec "$NSPID" "$DHCP_CLIENT" -pf "/var/run/dhclient.$NSPID.pid" "$CONTAINER_IFNAME"
+    ip netns exec "$NSPID" "$DHCP_CLIENT" $HOST_NAME_ARG -pf "/var/run/dhclient.$NSPID.pid" "$CONTAINER_IFNAME"
     kill "$(cat "/var/run/dhclient.$NSPID.pid")"
     rm "/var/run/dhclient.$NSPID.pid"
   fi
