@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # This code should (try to) follow Google's Shell Style Guide
 # (https://google-styleguide.googlecode.com/svn/trunk/shell.xml)
 set -e
@@ -225,8 +225,9 @@ ln -s "/proc/$NSPID/ns/net" "/var/run/netns/$NSPID"
 MTU=$(ip link show "$IFNAME" | awk '{print $5}')
 # If it's a bridge, we need to create a veth pair
 [ "$IFTYPE" = bridge ] && {
-  LOCAL_IFNAME="v${CONTAINER_IFNAME}pl${NSPID}"
-  GUEST_IFNAME="v${CONTAINER_IFNAME}pg${NSPID}"
+  R=$((  RANDOM % 10  ))
+  LOCAL_IFNAME="v${CONTAINER_IFNAME}pl${NSPID}-${R}"
+  GUEST_IFNAME="v${CONTAINER_IFNAME}pg${NSPID}-${R}"
   ip link add name "$LOCAL_IFNAME" mtu "$MTU" type veth peer name "$GUEST_IFNAME" mtu "$MTU"
   case "$BRTYPE" in
     linux)
