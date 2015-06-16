@@ -242,6 +242,10 @@ to access the container using the $CONTAINERID as a hostname; therefore,
 specifying $CONTAINERID as a container name rather than a container id
 may be more appropriate in this use-case.
 
+You can also specify a hostname to be sent to the DHCP server. The DHCP
+server can then use this hostname to populate a DNS server and you can
+access the container via the hostname.
+
 You need three things for this to work correctly:
 
 - obviously, a DHCP server (in the example above, a DHCP server should
