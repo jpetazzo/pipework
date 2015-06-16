@@ -1,5 +1,14 @@
 # Pipework
 
+## CHANGES FROM jpetazzo/pipework
+
+This version accepts a --no-macvlan option to namespace a physical interface
+exclusively to a container, without using a macvlan bridge.  Preliminary tests
+have shown significantly less overhead and higher throughput if the use case
+indicates assigning an interface to one container.
+
+## END CHANGES 
+
 **_Software-Defined Networking for Linux Containers_**
 
 Pipework lets you connect together containers in arbitrarily complex scenarios. 

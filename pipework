@@ -7,6 +7,10 @@ case "$1" in
   --wait)
     WAIT=1
     ;;
+  --direct-phys)
+    DIRECT_PHYS=1
+    shift
+    ;;
 esac
 
 IFNAME=$1
@@ -257,8 +261,14 @@ MTU=$(ip link show "$IFNAME" | awk '{print $5}')
     ip link set "$IFNAME" up
     IFNAME=$IFNAME.$VLAN
   }
-  GUEST_IFNAME=ph$NSPID$CONTAINER_IFNAME
-  ip link add link "$IFNAME" dev "$GUEST_IFNAME" mtu "$MTU" type macvlan mode bridge
+
+  if [ ! -z "$DIRECT_PHYS" ]; then
+    GUEST_IFNAME=$IFNAME
+  else
+    GUEST_IFNAME=ph$NSPID$CONTAINER_IFNAME
+    ip link add link "$IFNAME" dev "$GUEST_IFNAME" mtu "$MTU" type macvlan mode bridge
+  fi
+
   ip link set "$IFNAME" up
 }
 
