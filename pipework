@@ -19,7 +19,7 @@ if [ "$2" = "-i" ]; then
 fi
 
 HOST_NAME_ARG=""
-if [ "$2" == "-H" ]; then
+if [ "$2" = "-H" ]; then
   HOST_NAME_ARG="-H $3"
   shift 2
 fi
