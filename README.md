@@ -21,6 +21,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 * [Wait for the network to be ready](#wait_ready)  
 * [Add the interface without an IP address](#no_ip)  
 * [DHCP](#dhcp)  
+* [DHCP Options](#dhcp_options)
 * [Specify a custom MAC address](#custom_mac)  
 * [Virtual LAN (VLAN)](#vlan)  
 * [Support Open vSwitch](#openvswitch)  
@@ -231,9 +232,25 @@ but without configuring an IP address:
 ### DHCP
 
 You can use DHCP to obtain the IP address of the new interface. Just
-specify `dhcp` instead of an IP address; for instance:
+specify the name of the DHCP client that you want to use instead
+on an IP address; for instance:
 
-    pipework eth1 $CONTAINERID dhcp
+    pipework eth1 $CONTAINERID dhclient
+
+You can specify the following DHCP clients:
+
+- dhclient
+- udhcpc
+- dhcpcd
+- dhcp
+
+The first three are "normal" DHCP clients. They have to be installed
+on your host for this option to work. The last one works
+differently: it will run a DHCP client *in a Docker container*
+sharing its network namespace with your container. This allows
+to use DHCP configuration without worrying about installing the
+right DHCP client on your host. It will use the Docker `busybox`
+image and its embedded `udhcpc` client.
 
 The value of $CONTAINERID will be provided to the DHCP client to use
 as the hostname in the DHCP request. Depending on the configuration of
@@ -242,17 +259,15 @@ to access the container using the $CONTAINERID as a hostname; therefore,
 specifying $CONTAINERID as a container name rather than a container id
 may be more appropriate in this use-case.
 
-You can also specify a hostname to be sent to the DHCP server. The DHCP
-server can then use this hostname to populate a DNS server and you can
-access the container via the hostname.
-
 You need three things for this to work correctly:
 
 - obviously, a DHCP server (in the example above, a DHCP server should
   be listening on the network to which we are connected on `eth1`);
 - a DHCP client (either `udhcpc`, `dhclient` or `dhcpcp`) must be installed
   on your Docker *host* (you don't have to install it in your containers,
-  but it must be present on the host);
+  but it must be present on the host), unless you specify `dhcp` as
+  the client, in which case the Docker `busybox` image should be
+  available;
 - the underlying network must support bridged frames.
 
 The last item might be particularly relevant if you are trying to
@@ -262,6 +277,40 @@ originating from unknown MAC addresses; meaning that you have to go
 through extra hoops if you want it to work properly.
 
 It works fine on plain old wired Ethernet, though.
+
+
+<a name="dhcp_options"/>
+### DHCP Options
+
+You can specify extra DHCP options to be passed to the DHCP client
+by adding them with a semi-colon. For instance:
+
+    pipework eth1 $CONTAINERID dhcp:-f
+
+This will tell Pipework to setup the interface using the DHCP client
+of the Docker `busybox` image, and pass `-f` as an extra flag to this
+DHCP client. This flag instructs the client to remain in the foreground
+instead of going to the background. Let's see what this means.
+
+*Without* this flag, a new container is started, in which the DHCP
+client is executed. The DHCP client obtains a lease, then goes to
+the background. When it goes to the background, the PID 1 in this
+container exits, causing the whole container to be terminated.
+As a result, the "pipeworked" container has its IP address, but
+the DHCP client has gone. On the up side, you don't have any
+cleanup to do; on the other, the DHCP lease will not be renewed,
+which could be problematic if you have short leases and the
+server and other clients don't validate their leases before using
+them.
+
+*With* this flag, a new container is started, it runs the DHCP
+client just like before; but when it obtains the lease, it
+remains in the foreground. As a result, the lease will be
+properly renewed. However, when you terminate the "pipeworked"
+container, you should also take care of removing the container
+that runs the DHCP client. This can be seen as an advantage
+if you want to reuse this network stack even if the initial
+container is terminated.
 
 
 <a name="custom_mac"/>
