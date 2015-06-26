@@ -14,6 +14,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 * [Docker integration](#docker_integration)  
 * [Peeking inside the private network](#peeking_inside)  
 * [Setting container internal interface](#setting_internal)  
+* [Setting host interface name](#setting_host)  
 * [Using a different netmask](#different_netmask)  
 * [Setting a default gateway](#default_gateway)  
 * [Connect a container to a local physical interface](#local_physical)  
@@ -126,6 +127,12 @@ By default pipework creates a new interface `eth1` inside the container. In case
 `pipework br1 -i eth2 ...`
 
 **Note:**: for infiniband IPoIB interfaces, the default interface name is `ib0` and not `eth1`.
+
+<a name="setting_host"/>
+### Setting host interface name ##
+By default pipework will create a host-side interface with a fixed prefix but random suffix. If you would like to specify this interface name use the `-l` flag (for local):
+
+`pipework br1 -i eth2 -l hostapp1 ...`
 
 <a name="different_netmask"/>
 ### Using a different netmask
