@@ -140,11 +140,11 @@ case "$N" in
   0)
     # If we didn't find anything, try to lookup the container with Docker.
     if installed docker; then
-      RETRIES=3
+      RETRIES=10
       while [ "$RETRIES" -gt 0 ]; do
         DOCKERPID=$(docker inspect --format='{{ .State.Pid }}' "$GUESTNAME")
         [ "$DOCKERPID" != 0 ] && break
-        sleep 1
+        sleep 2
         RETRIES=$((RETRIES - 1))
       done
 
