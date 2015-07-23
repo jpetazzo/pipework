@@ -115,10 +115,6 @@ CONTAINER_IFNAME=${CONTAINER_IFNAME:-eth1}
   exit 0
 }
 
-[ "$IFTYPE" = bridge ] && [ "$BRTYPE" = linux ] && [ "$VLAN" ] && {
-  die 1 "VLAN configuration currently unsupported for Linux bridge."
-}
-
 [ "$IFTYPE" = ipoib ] && [ "$MACADDR" ] && {
   die 1 "MACADDR configuration unsupported for IPoIB interfaces."
 }
@@ -291,6 +287,12 @@ MTU=$(ip link show "$IFNAME" | awk '{print $5}')
 
 ip link set "$GUEST_IFNAME" netns "$NSPID"
 ip netns exec "$NSPID" ip link set "$GUEST_IFNAME" name "$CONTAINER_IFNAME"
+[ "$IFTYPE" = bridge ] && [ "$BRTYPE" = linux ] && [ "$VLAN" ] && {
+    ip netns exec "$NSPID" vconfig add "$CONTAINER_IFNAME" "$VLAN"
+    ip netns exec "$NSPID" ip link set dev "$CONTAINER_IFNAME" up
+    ip netns exec "$NSPID" ip link set dev "$CONTAINER_IFNAME.$VLAN" up
+    CONTAINER_IFNAME="$CONTAINER_IFNAME.$VLAN"
+}
 [ "$MACADDR" ] && ip netns exec "$NSPID" ip link set dev "$CONTAINER_IFNAME" address "$MACADDR"
 
 # When using any of the DHCP methods, we start a DHCP client in the
