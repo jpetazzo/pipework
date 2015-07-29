@@ -209,7 +209,11 @@ if [ "$DOCKERPID" ]; then
 else
   NSPID=$(head -n 1 "$(find "$CGROUPMNT" -name "$GUESTNAME" | head -n 1)/tasks")
   [ "$NSPID" ] || {
-    die 1 "Could not find a process inside container $GUESTNAME."
+    # it is an alternative way to get the pid
+    NSPID=$(lxc-info -n  "$GUESTNAME" | grep PID | grep -Eo '[0-9]+')
+    [ "$NSPID" ] || {
+      die 1 "Could not find a process inside container $GUESTNAME."
+    }
   }
 fi
 
