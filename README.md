@@ -21,6 +21,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 * [Let the Docker host communicate over macvlan interfaces](#macvlan)  
 * [Wait for the network to be ready](#wait_ready)  
 * [Add the interface without an IP address](#no_ip)  
+* [Add a dummy interface](#dummy_interface)  
 * [DHCP](#dhcp)  
 * [DHCP Options](#dhcp_options)
 * [Specify a custom MAC address](#custom_mac)  
@@ -236,6 +237,14 @@ but without configuring an IP address:
 
 
 <a name="dhcp"/>
+### Add a dummy interface
+
+If for some reason you want a dummy interface inside the container, you can add it like any other interface. Just set the host interface to the keyword dummy. All other options - IP, CIDR, gateway - function as normal.
+
+    pipework dummy $CONTAINERID 192.168.21.101/24@192.168.21.1
+
+Of course, a gateway does not mean much in the context of a dummy interface, but there it is.
+
 ### DHCP
 
 You can use DHCP to obtain the IP address of the new interface. Just
