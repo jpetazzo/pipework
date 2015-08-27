@@ -39,6 +39,16 @@ case "$MACADDR" in
     ;;
 esac
 
+# did they ask to generate a custom MACADDR?
+# generate the unique string
+case "$MACADDR" in
+  U:*)
+    macunique="${MACADDR#*:}"
+    # now generate a 48-bit hash string from $macunique
+    MACADDR=$(echo $FQDN|md5sum|sed 's/^\(..\)\(..\)\(..\)\(..\)\(..\).*$/02:\1:\2:\3:\4:\5/')
+   ;;
+esac
+
 [ "$IPADDR" ] || [ "$WAIT" ] || {
   echo "Syntax:"
   echo "pipework <hostinterface> [-i containerinterface] [-l localinterfacename] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
