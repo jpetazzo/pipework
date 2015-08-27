@@ -21,10 +21,12 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 * [Let the Docker host communicate over macvlan interfaces](#macvlan)  
 * [Wait for the network to be ready](#wait_ready)  
 * [Add the interface without an IP address](#no_ip)  
+* [Add a dummy interface](#dummy_interface)  
 * [DHCP](#dhcp)  
 * [DHCP Options](#dhcp_options)
 * [Specify a custom MAC address](#custom_mac)  
 * [Virtual LAN (VLAN)](#vlan)  
+* [Control routes](#routes)  
 * [Support Open vSwitch](#openvswitch)  
 * [Support Infiniband](#infiniband)
 * [Cleanup](#cleanup)  
@@ -235,6 +237,15 @@ but without configuring an IP address:
     pipework br1 $CONTAINERID 0/0
 
 
+<a name="dummy"/>
+### Add a dummy interface
+
+If for some reason you want a dummy interface inside the container, you can add it like any other interface. Just set the host interface to the keyword dummy. All other options - IP, CIDR, gateway - function as normal.
+
+    pipework dummy $CONTAINERID 192.168.21.101/24@192.168.21.1
+
+Of course, a gateway does not mean much in the context of a dummy interface, but there it is.
+
 <a name="dhcp"/>
 ### DHCP
 
@@ -364,6 +375,21 @@ The following will attach container zerorpcworker to the Open vSwitch bridge
 ovs0 and attach the container to VLAN ID 10.
 
     pipework ovsbr0 $(docker run -d zerorpcworker) dhcp @10
+
+<a name="routes">
+### Control Routes
+
+If you want to add/delete/replace routes in the container, you can run any iproute2 route command via pipework. 
+
+All you have to do is set the interface to be `route`, followed by the container ID or name, followed by the route command.
+
+Here are some examples.
+
+    pipework route $CONTAINERID add 10.0.5.6/24 via 192.168.2.1
+    pipework route $CONTAINERID replace default via 10.2.3.5.78
+
+Everything after the container ID (or name) will be run as an argument to `ip route` inside the container's namespace. Use the iproute2 man page.
+
 
 <a name="openvswitch"/>
 ### Support Open vSwitch
