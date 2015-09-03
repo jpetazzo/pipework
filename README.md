@@ -48,6 +48,7 @@ the following to the config for the same effect:
 
 ```Ruby
 config.vm.provider "virtualbox" do |v|
+  v.customize ['modifyvm', :id, '--nictype1', 'Am79C973']
   v.customize ['modifyvm', :id, '--nicpromisc1', 'allow-all']
 end
 ```
