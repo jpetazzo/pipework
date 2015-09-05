@@ -286,7 +286,7 @@ It works fine on plain old wired Ethernet, though.
 ### DHCP Options
 
 You can specify extra DHCP options to be passed to the DHCP client
-by adding them with a semi-colon. For instance:
+by adding them with a colon. For instance:
 
     pipework eth1 $CONTAINERID dhcp:-f
 
