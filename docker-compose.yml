@@ -1,0 +1,6 @@
+doctoc:
+  build: doctoc
+  volumes:
+    - .:/src
+  command: /src/README.md
+
