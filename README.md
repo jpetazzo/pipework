@@ -35,7 +35,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-<a name="notes"/>
+
 ### Things to note
 
 #### Virtualbox
@@ -72,7 +72,6 @@ the current version of Docker, then okay, let's see how we can help you!
 The following examples show what Pipework can do for you and your containers.
 
 
-<a name="lamp"/>
 ### LAMP stack with a private network between the MySQL and Apache containers
 
 Let's create two containers, running the web tier and the database tier:
@@ -105,7 +104,6 @@ This will:
 Now, both containers can ping each other on the 192.168.1.0/24 subnet.
 
 
-<a name="docker_integration"/>
 ### Docker integration
 
 Pipework can resolve Docker containers names. If the container ID that
@@ -116,7 +114,6 @@ with `docker inspect`. This makes it even simpler to use:
     pipework br1 web1 192.168.12.23/24
 
 
-<a name="peeking_inside"/>
 ### Peeking inside the private network
 
 Want to connect to those containers using their private addresses? Easy:
@@ -125,7 +122,7 @@ Want to connect to those containers using their private addresses? Easy:
 
 Voilà!
 
-<a name="setting_internal"/>
+
 ### Setting container internal interface ##
 By default pipework creates a new interface `eth1` inside the container. In case you want to change this interface name like `eth2`, e.g., to have more than one interface set by pipework, use:
 
@@ -133,13 +130,13 @@ By default pipework creates a new interface `eth1` inside the container. In case
 
 **Note:**: for infiniband IPoIB interfaces, the default interface name is `ib0` and not `eth1`.
 
-<a name="setting_host"/>
+
 ### Setting host interface name ##
 By default pipework will create a host-side interface with a fixed prefix but random suffix. If you would like to specify this interface name use the `-l` flag (for local):
 
 `pipework br1 -i eth2 -l hostapp1 ...`
 
-<a name="different_netmask"/>
+
 ### Using a different netmask
 
 The IP addresses given to `pipework` are directly passed to the `ip addr`
@@ -154,7 +151,6 @@ pipework is not clever enough to use your specified subnet size for
 the first container, and retain it to use it for the other containers.
 
 
-<a name="default_gateway"/>
 ### Setting a default gateway
 
 If you want *outbound* traffic (i.e. when the containers connects
@@ -170,7 +166,6 @@ after the IP address and subnet mask:
     pipework br1 $CONTAINERID 192.168.4.25/20@192.168.4.1
 
 
-<a name="local_physical"/>
 ### Connect a container to a local physical interface
 
 Let's pretend that you want to run two Hipache instances, listening on real
@@ -183,7 +178,6 @@ Note that this will use `macvlan` subinterfaces, so you can actually put
 multiple containers on the same physical interface.
 
 
-<a name="macvlan"/>
 ### Let the Docker host communicate over macvlan interfaces
 
 If you use macvlan interfaces as shown in the previous paragraph, you
@@ -211,7 +205,6 @@ the usual way:
     pipework eth0 $CID 10.1.1.234/24@10.1.1.254
 
 
-<a name="wait_ready"/>
 ### Wait for the network to be ready
 
 Sometimes, you want the extra network interface to be up and running *before*
@@ -229,7 +222,7 @@ this:
 
     pipework --wait -i ib0
 
-<a name="no_ip"/>
+
 ### Add the interface without an IP address
 
 If for some reason you want to set the IP address from within the
@@ -240,7 +233,6 @@ but without configuring an IP address:
     pipework br1 $CONTAINERID 0/0
 
 
-<a name="dhcp"/>
 ### DHCP
 
 You can use DHCP to obtain the IP address of the new interface. Just
@@ -291,7 +283,6 @@ through extra hoops if you want it to work properly.
 It works fine on plain old wired Ethernet, though.
 
 
-<a name="dhcp_options"/>
 ### DHCP Options
 
 You can specify extra DHCP options to be passed to the DHCP client
@@ -325,7 +316,6 @@ if you want to reuse this network stack even if the initial
 container is terminated.
 
 
-<a name="custom_mac"/>
 ### Specify a custom MAC address
 
 If you need to specify the MAC address to be used (either by the `macvlan`
@@ -355,7 +345,7 @@ be `2`, `6`, `a`, or `e`. You can check [Wikipedia](
 http://en.wikipedia.org/wiki/MAC_address) if you want even more details.
 
 **Note:**  Setting the MAC address of an IPoIB interface is not supported.
-<a name="vlan"/>
+
 ### Virtual LAN (VLAN)
 
 If you want to attach the container to a specific VLAN, the VLAN ID can be
@@ -370,7 +360,7 @@ ovs0 and attach the container to VLAN ID 10.
 
     pipework ovsbr0 $(docker run -d zerorpcworker) dhcp @10
 
-<a name="openvswitch"/>
+
 ### Support Open vSwitch
 
 If you want to attach a container to the Open vSwitch bridge, no problem.
@@ -381,7 +371,7 @@ If you want to attach a container to the Open vSwitch bridge, no problem.
 
 If the ovs bridge doesn't exist, it will be automatically created
 
-<a name="infiniband"/>
+
 ### Support Infiniband IPoIB
 
 Passing an IPoIB interface to a container is supported.  However, the entire device
@@ -391,7 +381,7 @@ from the host.
 To provide infiniband to multiple containers, use SR-IOV and pass
 the virtual function devices to the containers.
   
-<a name="cleanup"/>
+
 ### Cleanup
 
 When a container is terminated (the last process of the net namespace exits),
