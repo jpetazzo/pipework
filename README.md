@@ -6,29 +6,34 @@ Pipework lets you connect together containers in arbitrarily complex scenarios.
 Pipework uses cgroups and namespace and works with "plain" LXC containers 
 (created with `lxc-start`), and with the awesome [Docker](http://www.docker.io/).
 
-##### Table of Contents
-* [Things to note](#notes)  
-  * Virtualbox
-  * Docker
-* [LAMP stack with a private network between the MySQL and Apache containers](#lamp)  
-* [Docker integration](#docker_integration)  
-* [Peeking inside the private network](#peeking_inside)  
-* [Setting container internal interface](#setting_internal)  
-* [Setting host interface name](#setting_host)  
-* [Using a different netmask](#different_netmask)  
-* [Setting a default gateway](#default_gateway)  
-* [Connect a container to a local physical interface](#local_physical)  
-* [Let the Docker host communicate over macvlan interfaces](#macvlan)  
-* [Wait for the network to be ready](#wait_ready)  
-* [Add the interface without an IP address](#no_ip)  
-* [DHCP](#dhcp)  
-* [DHCP Options](#dhcp_options)
-* [Specify a custom MAC address](#custom_mac)  
-* [Virtual LAN (VLAN)](#vlan)  
-* [Support Open vSwitch](#openvswitch)  
-* [Support Infiniband](#infiniband)
-* [Cleanup](#cleanup)  
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
+- [Things to note](#things-to-note)
+  - [Virtualbox](#virtualbox)
+  - [Docker](#docker)
+- [LAMP stack with a private network between the MySQL and Apache containers](#lamp-stack-with-a-private-network-between-the-mysql-and-apache-containers)
+- [Docker integration](#docker-integration)
+- [Peeking inside the private network](#peeking-inside-the-private-network)
+- [Setting container internal interface](#setting-container-internal-interface)
+- [Setting host interface name](#setting-host-interface-name)
+- [Using a different netmask](#using-a-different-netmask)
+- [Setting a default gateway](#setting-a-default-gateway)
+- [Connect a container to a local physical interface](#connect-a-container-to-a-local-physical-interface)
+- [Let the Docker host communicate over macvlan interfaces](#let-the-docker-host-communicate-over-macvlan-interfaces)
+- [Wait for the network to be ready](#wait-for-the-network-to-be-ready)
+- [Add the interface without an IP address](#add-the-interface-without-an-ip-address)
+- [DHCP](#dhcp)
+- [DHCP Options](#dhcp-options)
+- [Specify a custom MAC address](#specify-a-custom-mac-address)
+- [Virtual LAN (VLAN)](#virtual-lan-vlan)
+- [Support Open vSwitch](#support-open-vswitch)
+- [Support Infiniband IPoIB](#support-infiniband-ipoib)
+- [Cleanup](#cleanup)
+- [About this file](#about-this-file)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 <a name="notes"/>
 ### Things to note
@@ -393,3 +398,15 @@ When a container is terminated (the last process of the net namespace exits),
 the network interfaces are garbage collected. The interface in the container
 is automatically destroyed, and the interface in the docker host (part of the
 bridge) is then destroyed as well.
+
+
+### About this file
+
+This README file is currently the only documentation for pipework. When
+updating it (specifically, when adding/removing/moving sections), please
+update the table of contents. This can be done very easily by just running:
+
+    docker-compose up
+
+This will build a container with `doctoc` and run it to regenerate the
+table of contents. That's it!
