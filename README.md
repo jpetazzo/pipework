@@ -28,6 +28,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 - [DHCP Options](#dhcp-options)
 - [Specify a custom MAC address](#specify-a-custom-mac-address)
 - [Virtual LAN (VLAN)](#virtual-lan-vlan)
+- [Control routes](#routes)
 - [Support Open vSwitch](#support-open-vswitch)
 - [Support Infiniband IPoIB](#support-infiniband-ipoib)
 - [Cleanup](#cleanup)
@@ -361,6 +362,18 @@ ovs0 and attach the container to VLAN ID 10.
 
     pipework ovsbr0 $(docker run -d zerorpcworker) dhcp @10
 
+### Control Routes
+
+If you want to add/delete/replace routes in the container, you can run any iproute2 route command via pipework.
+
+All you have to do is set the interface to be `route`, followed by the container ID or name, followed by the route command.
+
+Here are some examples.
+
+    pipework route $CONTAINERID add 10.0.5.6/24 via 192.168.2.1
+    pipework route $CONTAINERID replace default via 10.2.3.5.78
+
+Everything after the container ID (or name) will be run as an argument to `ip route` inside the container's namespace. Use the iproute2 man page.
 
 ### Support Open vSwitch
 
