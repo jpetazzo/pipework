@@ -29,7 +29,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 - [Specify a custom MAC address](#specify-a-custom-mac-address)
 - [Virtual LAN (VLAN)](#virtual-lan-vlan)
 - [Support Open vSwitch](#support-open-vswitch)
-- [Support Infiniband IPoIB](#support-infiniband-ipoib)
+- [Support InfiniBand IPoIB](#support-infiniband-ipoib)
 - [Cleanup](#cleanup)
 - [About this file](#about-this-file)
 
@@ -129,7 +129,7 @@ By default pipework creates a new interface `eth1` inside the container. In case
 
 `pipework br1 -i eth2 ...`
 
-**Note:**: for infiniband IPoIB interfaces, the default interface name is `ib0` and not `eth1`.
+**Note:**: for InfiniBand IPoIB interfaces, the default interface name is `ib0` and not `eth1`.
 
 
 ### Setting host interface name ##
@@ -373,15 +373,20 @@ If you want to attach a container to the Open vSwitch bridge, no problem.
 If the ovs bridge doesn't exist, it will be automatically created
 
 
-### Support Infiniband IPoIB
+### Support InfiniBand IPoIB
 
-Passing an IPoIB interface to a container is supported.  However, the entire device
-is moved into the network namespace of the container.  It therefore becomes hidden
-from the host.  
+Passing an IPoIB interface to a container is supported.  The IPoIB device is
+created as a virtual device, similarly to how macvlan devices work.  The
+interface also supports setting a partition key for the created virtual device.
 
-To provide infiniband to multiple containers, use SR-IOV and pass
-the virtual function devices to the containers.
-  
+The following will attach a container to ib0
+
+    pipework ib0 $CONTAINERID 10.10.10.10/24
+
+The following will do the same but connect it to ib0 with pkey 0x8001
+
+    pipework ib0 $CONTAINERID 10.10.10.10/24 @8001
+
 
 ### Cleanup
 

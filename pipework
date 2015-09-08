@@ -76,10 +76,11 @@ if [ -z "$WAIT" ]; then
     elif installed ovs-vsctl && ovs-vsctl list-br|grep -q "^${IFNAME}$"; then
       IFTYPE=bridge
       BRTYPE=openvswitch
-    elif [ "$(cat "/sys/class/net/$IFNAME/type")" -eq 32 ]; then # Infiniband IPoIB interface type 32
+    elif [ "$(cat "/sys/class/net/$IFNAME/type")" -eq 32 ]; then # InfiniBand IPoIB interface type 32
       IFTYPE=ipoib
       # The IPoIB kernel module is fussy, set device name to ib0 if not overridden
       CONTAINER_IFNAME=${CONTAINER_IFNAME:-ib0}
+      PKEY=$VLAN
     else IFTYPE=phys
     fi
   else
@@ -270,15 +271,6 @@ MTU=$(ip link show "$IFNAME" | awk '{print $5}')
   ip link set "$LOCAL_IFNAME" up
 }
 
-# Note: if no container interface name was specified, pipework will default to ib0
-# Note: no macvlan subinterface or ethernet bridge can be created against an 
-# ipoib interface. Infiniband is not ethernet. ipoib is an IP layer for it.
-# To provide additional ipoib interfaces to containers use SR-IOV and pipework 
-# to assign them.
-[ "$IFTYPE" = ipoib ] && {
-  GUEST_IFNAME=$CONTAINER_IFNAME
-}
-
 # If it's a physical interface, create a macvlan subinterface
 [ "$IFTYPE" = phys ] && {
   [ "$VLAN" ] && {
@@ -290,6 +282,25 @@ MTU=$(ip link show "$IFNAME" | awk '{print $5}')
   }
   GUEST_IFNAME=ph$NSPID$CONTAINER_IFNAME
   ip link add link "$IFNAME" dev "$GUEST_IFNAME" mtu "$MTU" type macvlan mode bridge
+  ip link set "$IFNAME" up
+}
+
+# If it's an IPoIB interface, create a virtual IPoIB interface (the IPoIB
+# equivalent of a macvlan device)
+#
+# Note: no macvlan subinterface nor Ethernet bridge can be created on top of an
+# IPoIB interface. InfiniBand is not Ethernet. IPoIB is an IP layer on top of
+# InfiniBand, without an intermediate Ethernet layer.
+[ "$IFTYPE" = ipoib ] && {
+  GUEST_IFNAME="${IFNAME}.${NSPID}"
+
+  # If a partition key is provided, use it
+  [ "$PKEY" ] && {
+    GUEST_IFNAME="${IFNAME}.${PKEY}.${NSPID}"
+    PKEY="pkey 0x$PKEY"
+  }
+
+  ip link add link "$IFNAME" name "$GUEST_IFNAME" type ipoib $PKEY
   ip link set "$IFNAME" up
 }
 
