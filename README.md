@@ -58,6 +58,7 @@ config.vm.provider "virtualbox" do |v|
 end
 ```
 
+
 #### Docker
 
 **Before using Pipework, please ask on the [docker-user mailing list](
@@ -394,6 +395,19 @@ When a container is terminated (the last process of the net namespace exits),
 the network interfaces are garbage collected. The interface in the container
 is automatically destroyed, and the interface in the docker host (part of the
 bridge) is then destroyed as well.
+
+
+### Integrating pipework with other tools
+
+@dreamcat4 has built an amazing fork of pipework that can be integrated
+with other tools in the Docker ecosystem, like Compose or Crane.
+It can be used in "one shot," to create a bunch of network connections
+between containers; it can run in the background as a daemon, watching
+the Docker events API, and automatically invoke pipework when containers
+are started, and it can also expose pipework itself through an API.
+
+For more info, check the [dreamcat4/pipework](https://hub.docker.com/r/dreamcat4/pipework/)
+image on the Docker Hub.
 
 
 ### About this file
