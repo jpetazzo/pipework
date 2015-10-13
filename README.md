@@ -24,7 +24,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 - [Let the Docker host communicate over macvlan interfaces](#let-the-docker-host-communicate-over-macvlan-interfaces)
 - [Wait for the network to be ready](#wait-for-the-network-to-be-ready)
 - [Add the interface without an IP address](#add-the-interface-without-an-ip-address)
-- [Add a dummy interface](#dummy_interface)  
+- [Add a dummy interface](#add-a-dummy-interface)
 - [DHCP](#dhcp)
 - [DHCP Options](#dhcp-options)
 - [Specify a custom MAC address](#specify-a-custom-mac-address)
@@ -32,6 +32,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 - [Support Open vSwitch](#support-open-vswitch)
 - [Support InfiniBand IPoIB](#support-infiniband-ipoib)
 - [Cleanup](#cleanup)
+- [Integrating pipework with other tools](#integrating-pipework-with-other-tools)
 - [About this file](#about-this-file)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
