@@ -38,6 +38,17 @@ case "$MACADDR" in
     ;;
 esac
 
+# did they ask to generate a custom MACADDR?
+# generate the unique string
+case "$MACADDR" in
+  U:*)
+    macunique="${MACADDR#*:}"
+    # now generate a 48-bit hash string from $macunique
+    MACADDR=$(echo $macunique|md5sum|sed 's/^\(..\)\(..\)\(..\)\(..\)\(..\).*$/02:\1:\2:\3:\4:\5/')
+   ;;
+esac
+
+
 [ "$IPADDR" ] || [ "$WAIT" ] || {
   echo "Syntax:"
   echo "pipework <hostinterface> [-i containerinterface] [-l localinterfacename] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
@@ -266,7 +277,7 @@ ln -s "/proc/$NSPID/ns/net" "/var/run/netns/$NSPID"
       (ip link set "$LOCAL_IFNAME" master "$IFNAME" > /dev/null 2>&1) || (brctl addif "$IFNAME" "$LOCAL_IFNAME")
       ;;
     openvswitch)
-      if ! ovs-vsctl list-ports "$IFNAME" | grep -q "$LOCAL_IFNAME"; then
+      if ! ovs-vsctl list-ports "$IFNAME" | grep -q "^${LOCAL_IFNAME}$"; then
         ovs-vsctl add-port "$IFNAME" "$LOCAL_IFNAME" ${VLAN:+tag="$VLAN"}
       fi
       ;;
