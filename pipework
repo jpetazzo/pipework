@@ -328,7 +328,6 @@ case "$DHCP_CLIENT" in
   dhclient)
     ip netns exec "$NSPID" "$DHCP_CLIENT" "$CONTAINER_IFNAME" \
                                           -pf "/var/run/dhclient.$NSPID.pid" \
-                                          -H "$GUESTNAME" \
                                           $DHCP_OPTIONS
     # kill dhclient after get ip address to prevent device be used after container close
     kill "$(cat "/var/run/dhclient.$NSPID.pid")"
