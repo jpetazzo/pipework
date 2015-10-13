@@ -356,6 +356,16 @@ In other words, if your MAC address is `?X:??:??:??:??:??`, `X` should
 be `2`, `6`, `a`, or `e`. You can check [Wikipedia](
 http://en.wikipedia.org/wiki/MAC_address) if you want even more details.
 
+If you want a consistent MAC address across container restarts, but don't want to have to keep track of the messy MAC addresses, ask pipework to generate an address for you based on a specified string, e.g. the hostname. This guarantees a consistent MAC address:
+
+    pipework eth0 <container> dhcp U:<some_string>
+
+pipework will take *some_string* and hash it using MD5. It will then take the first 40 bits of the MD5 hash, add those to the locally administered prefix of 0x02, and create a unique MAC address.
+
+For example, if your unique string is "myhost.foo.com", then the MAC address will **always** be `02:72:6c:cd:9b:8d`.
+
+This is particularly useful in the case of DHCP, where you might want the container to stop and start, but always get the same address. Most DHCP servers will keep giving you a consistent IP address if the MAC address is consistent.
+
 **Note:**  Setting the MAC address of an IPoIB interface is not supported.
 
 ### Virtual LAN (VLAN)
