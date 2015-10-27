@@ -357,8 +357,7 @@ case "$DHCP_CLIENT" in
     ip netns exec "$NSPID" "$DHCP_CLIENT" -q "$CONTAINER_IFNAME" -h "$GUESTNAME"
     ;;
   "")
-    which ipcalc >/dev/null 2>&1
-    if [ $? -eq 0 ]; then
+    if installed ipcalc; then
       eval $(ipcalc -b $IPADDR)
       ip netns exec "$NSPID" ip addr add "$IPADDR" brd "$BROADCAST" dev "$CONTAINER_IFNAME"
     else
