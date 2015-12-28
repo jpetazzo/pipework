@@ -195,7 +195,10 @@ case "$IPADDR" in
   udhcpc|udhcpc:*|udhcpc-f|udhcpc-f:*|dhcpcd|dhcpcd:*|dhclient|dhclient:*|dhclient-f|dhclient-f:*)
     DHCP_CLIENT=${IPADDR%%:*}
     # did they ask for the client to remain?
-    DHCP_FOREGROUND=$(echo $DHCP_CLIENT | grep '\-f')
+    DHCP_FOREGROUND=
+    [ "${DHCP_CLIENT: -2}" = '-f' ] && {
+      DHCP_FOREGROUND=true
+    }
     DHCP_CLIENT=${DHCP_CLIENT%-f}
     if ! installed "$DHCP_CLIENT"; then
       die 1 "You asked for DHCP client $DHCP_CLIENT, but I can't find it."
