@@ -409,6 +409,10 @@ The following will do the same but connect it to ib0 with pkey 0x8001
 
     pipework ib0 $CONTAINERID 10.10.10.10/24 @8001
 
+### Important
+
+The gratuitous arp work with iputils-arping package as well. Ubuntu/Debian distribution contains two arping package.
+
 
 ### Cleanup
 
