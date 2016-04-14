@@ -11,6 +11,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
 - [Things to note](#things-to-note)
+  - [vCenter / vSphere / ESX / ESXi](#vcenter--vsphere--esx--esxi)
   - [Virtualbox](#virtualbox)
   - [Docker](#docker)
 - [LAMP stack with a private network between the MySQL and Apache containers](#lamp-stack-with-a-private-network-between-the-mysql-and-apache-containers)
@@ -37,17 +38,34 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-
-
 ### Things to note
 
-#### Virtualbox
+#### vCenter / vSphere / ESX / ESXi
+**If you use vCenter / VSphere / ESX / ESXi** Set or ask your Administrator to set 
+Network Security Policies of the vSwitch as below
+* Promiscuous mode:    **Accept**
+* MAC address changes: **Accept**
+* Forged transmits:    **Accept**
 
+After starting OS and creating a bridge please remember to also always set
+* `brctl stp br1 off`, otherwise switch might disable port
+* `brctl setfd br1 2`, otherwise quite a long wait for br1
+* `brctl setmaxage br1  0`, otherwise container is inaccessible
+
+#### Virtualbox
 **If you use VirtualBox**, you will have to update your VM network settings.
 Open the settings panel for the VM, go the the "Network" tab, pull down the
-"Advanced" settings. Here, the "Adapter Type" should be `pcnet` (the full
-name is something like "PCnet-FAST III"), instead of the default `e1000`
-(Intel PRO/1000). Also, "Promiscuous Mode" should be set to "Allow All".
+"Advanced" settings. Here, the "Adapter Type" should be one of below
+* `pcnet` ("PCnet-FAST III", not supported by CENTOS7),
+* `virtio-net` (Paravirtualized Network, supported by most modern systems)  
+
+Also Remember to set "Promiscuous Mode" should be set to "Allow All".
+
+After starting OS and creating a bridge please remember to also always set 
+* `brctl stp br1 off`, otherwise switch might disable port
+* `brctl setfd br1 2`, otherwise quite a long wait for br1
+* `brctl setmaxage br1 0`, otherwise container is inaccessible
+
 If you don't do that, bridged containers won't work, because the virtual
 NIC will filter out all packets with a different MAC address.  If you are
 running VirtualBox in headless mode, the command line equivalent of the above
