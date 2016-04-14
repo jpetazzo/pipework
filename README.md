@@ -11,6 +11,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
 - [Things to note](#things-to-note)
+  - [vCenter / vSphere / ESX / ESXi](#vcenter--vsphere--esx--esxi)
   - [Virtualbox](#virtualbox)
   - [Docker](#docker)
 - [LAMP stack with a private network between the MySQL and Apache containers](#lamp-stack-with-a-private-network-between-the-mysql-and-apache-containers)
@@ -37,17 +38,32 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-
-
 ### Things to note
 
-#### Virtualbox
+#### vCenter / vSphere / ESX / ESXi
+**If you use vCenter / VSphere / ESX / ESXi,** set or ask your administrator
+to set *Network Security Policies* of the vSwitch as below:
 
+- Promiscuous mode:    **Accept**
+- MAC address changes: **Accept**
+- Forged transmits:    **Accept**
+
+After starting the guest OS and creating a bridge, you might also need to
+fine-tune the `br1` interface as follows:
+
+- `brctl stp br1 off` (to disable the STP protocol and prevent the switch
+  from disabling ports)
+- `brctl setfd br1 2` (to reduce the time taken by the `br1` interface to go
+  from *blocking* to *forwarding* state)
+- `brctl setmaxage br1 0`
+
+#### Virtualbox
 **If you use VirtualBox**, you will have to update your VM network settings.
 Open the settings panel for the VM, go the the "Network" tab, pull down the
 "Advanced" settings. Here, the "Adapter Type" should be `pcnet` (the full
 name is something like "PCnet-FAST III"), instead of the default `e1000`
 (Intel PRO/1000). Also, "Promiscuous Mode" should be set to "Allow All".
+
 If you don't do that, bridged containers won't work, because the virtual
 NIC will filter out all packets with a different MAC address.  If you are
 running VirtualBox in headless mode, the command line equivalent of the above
@@ -60,6 +76,10 @@ config.vm.provider "virtualbox" do |v|
   v.customize ['modifyvm', :id, '--nicpromisc1', 'allow-all']
 end
 ```
+
+Note: it looks like some operating systems (e.g. CentOS 7) do not support
+`pcnet` anymore. You might want to use the `virtio-net` (Paravirtualized
+Network) interface with those.
 
 
 #### Docker
