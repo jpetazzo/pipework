@@ -41,30 +41,28 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 ### Things to note
 
 #### vCenter / vSphere / ESX / ESXi
-**If you use vCenter / VSphere / ESX / ESXi** Set or ask your Administrator to set 
-Network Security Policies of the vSwitch as below
-* Promiscuous mode:    **Accept**
-* MAC address changes: **Accept**
-* Forged transmits:    **Accept**
+**If you use vCenter / VSphere / ESX / ESXi,** set or ask your administrator
+to set *Network Security Policies* of the vSwitch as below:
 
-After starting OS and creating a bridge please remember to also always set
-* `brctl stp br1 off`, otherwise switch might disable port
-* `brctl setfd br1 2`, otherwise quite a long wait for br1
-* `brctl setmaxage br1  0`, otherwise container is inaccessible
+- Promiscuous mode:    **Accept**
+- MAC address changes: **Accept**
+- Forged transmits:    **Accept**
+
+After starting the guest OS and creating a bridge, you might also need to
+fine-tune the `br1` interface as follows:
+
+- `brctl stp br1 off` (to disable the STP protocol and prevent the switch
+  from disabling ports)
+- `brctl setfd br1 2` (to reduce the time taken by the `br1` interface to go
+  from *blocking* to *forwarding* state)
+- `brctl setmaxage br1 0`
 
 #### Virtualbox
 **If you use VirtualBox**, you will have to update your VM network settings.
 Open the settings panel for the VM, go the the "Network" tab, pull down the
-"Advanced" settings. Here, the "Adapter Type" should be one of below
-* `pcnet` ("PCnet-FAST III", not supported by CENTOS7),
-* `virtio-net` (Paravirtualized Network, supported by most modern systems)  
-
-Also Remember to set "Promiscuous Mode" should be set to "Allow All".
-
-After starting OS and creating a bridge please remember to also always set 
-* `brctl stp br1 off`, otherwise switch might disable port
-* `brctl setfd br1 2`, otherwise quite a long wait for br1
-* `brctl setmaxage br1 0`, otherwise container is inaccessible
+"Advanced" settings. Here, the "Adapter Type" should be `pcnet` (the full
+name is something like "PCnet-FAST III"), instead of the default `e1000`
+(Intel PRO/1000). Also, "Promiscuous Mode" should be set to "Allow All".
 
 If you don't do that, bridged containers won't work, because the virtual
 NIC will filter out all packets with a different MAC address.  If you are
@@ -78,6 +76,10 @@ config.vm.provider "virtualbox" do |v|
   v.customize ['modifyvm', :id, '--nicpromisc1', 'allow-all']
 end
 ```
+
+Note: it looks like some operating systems (e.g. CentOS 7) do not support
+`pcnet` anymore. You might want to use the `virtio-net` (Paravirtualized
+Network) interface with those.
 
 
 #### Docker
