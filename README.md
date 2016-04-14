@@ -295,6 +295,31 @@ through extra hoops if you want it to work properly.
 
 It works fine on plain old wired Ethernet, though.
 
+#### Lease Renewal
+
+All of the DHCP options - udhcpc, dhcp, dhclient, dhcpcd - exit or are killed by pipework when they are done assigning a lease. This is to prevent zombie processes from existing after a container exits, but the dhcp client still exists.
+
+However, if the container is long-running - longer than the life of the lease - then the lease will expire, no dhcp client renews the lease, and the container is stuck without a valid IP address.
+
+To resolve this problem, you can cause the dhcp client to remain alive. The method depends on the dhcp client you use.
+
+* dhcp: see the next section [DHCP Options](#dhcp-options)
+* dhclient: use DHCP client `dhclient-f`
+* udhcpc: use DHCP client `udhcpc-f`
+* dhcpcd: not yet supported.
+
+
+**Note:** If you use this option *you* will be responsible for finding and killing those dhcp client processes in the future. pipework is a one-time script; it is not intended to manage long-running processes for you.
+
+In order to find the processes, you can look for pidfiles in the following locations:
+
+* dhcp: see the next section [DHCP Options](#dhcp-options)
+* dhclient: pidfiles in `/var/run/dhclient.$GUESTNAME.pid`
+* udhcpc: pidfiles in `/var/run/udhcpc.$GUESTNAME.pid`
+* dhcpcd: not yet supported
+
+`$GUESTNAME` is the name or ID of the guest as you passed it to pipework on instantiation.
+
 
 ### DHCP Options
 

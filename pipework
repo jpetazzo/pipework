@@ -192,8 +192,14 @@ case "$IPADDR" in
     fi
     DHCP_CLIENT=${IPADDR%%:*}
     ;;
-  udhcpc|udhcpc:*|dhcpcd|dhcpcd:*|dhclient|dhclient:*)
+  udhcpc|udhcpc:*|udhcpc-f|udhcpc-f:*|dhcpcd|dhcpcd:*|dhclient|dhclient:*|dhclient-f|dhclient-f:*)
     DHCP_CLIENT=${IPADDR%%:*}
+    # did they ask for the client to remain?
+    DHCP_FOREGROUND=
+    [ "${DHCP_CLIENT: -2}" = '-f' ] && {
+      DHCP_FOREGROUND=true
+    }
+    DHCP_CLIENT=${DHCP_CLIENT%-f}
     if ! installed "$DHCP_CLIENT"; then
       die 1 "You asked for DHCP client $DHCP_CLIENT, but I can't find it."
     fi
@@ -341,17 +347,28 @@ case "$DHCP_CLIENT" in
            >/dev/null
     ;;
   udhcpc)
+    DHCP_Q="-q"
+    [ "$DHCP_FOREGROUND" ] && {
+      DHCP_OPTIONS="$DHCP_OPTIONS -f"
+    }
     ip netns exec "$NSPID" "$DHCP_CLIENT" -qi "$CONTAINER_IFNAME" \
                                           -x "hostname:$GUESTNAME" \
+                                          -p "/var/run/udhcpc.$GUESTNAME.pid" \
                                           $DHCP_OPTIONS
+    [ ! "$DHCP_FOREGROUND" ] && {
+      rm "/var/run/udhcpc.$GUESTNAME.pid"
+    }
     ;;
   dhclient)
     ip netns exec "$NSPID" "$DHCP_CLIENT" "$CONTAINER_IFNAME" \
-                                          -pf "/var/run/dhclient.$NSPID.pid" \
+                                          -pf "/var/run/dhclient.$GUESTNAME.pid" \
+                                          -lf "/etc/dhclient/dhclient.$GUESTNAME.leases" \
                                           $DHCP_OPTIONS
     # kill dhclient after get ip address to prevent device be used after container close
-    kill "$(cat "/var/run/dhclient.$NSPID.pid")"
-    rm "/var/run/dhclient.$NSPID.pid"
+    [ ! "$DHCP_FOREGROUND" ] && {
+      kill "$(cat "/var/run/dhclient.$GUESTNAME.pid")"
+      rm "/var/run/dhclient.$GUESTNAME.pid"
+    }
     ;;
   dhcpcd)
     ip netns exec "$NSPID" "$DHCP_CLIENT" -q "$CONTAINER_IFNAME" -h "$GUESTNAME"
