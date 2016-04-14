@@ -409,9 +409,15 @@ The following will do the same but connect it to ib0 with pkey 0x8001
 
     pipework ib0 $CONTAINERID 10.10.10.10/24 @8001
 
-### Important
+### Gratuitous ARP
 
-The gratuitous arp work with iputils-arping package as well. Ubuntu/Debian distribution contains two arping package.
+If `arping` is installed, it will be used to send a gratuitous ARP reply
+to the container's neighbors. This can be useful if the container doesn't
+emit any network traffic at all, and seems unreachable (but suddenly becomes
+reachable after it generates some traffic).
+
+Note, however, that Ubuntu/Debian distributions contain two different `arping`
+packages. The one you want is `iputils-arping`.
 
 
 ### Cleanup
