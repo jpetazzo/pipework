@@ -26,6 +26,7 @@ fi
 GUESTNAME=$2
 IPADDR=$3
 MACADDR=$4
+ROUTECMD=${*:3}
 
 case "$MACADDR" in
   *@*)
@@ -53,6 +54,7 @@ esac
   echo "Syntax:"
   echo "pipework <hostinterface> [-i containerinterface] [-l localinterfacename] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
   echo "pipework <hostinterface> [-i containerinterface] [-l localinterfacename] <guest> dhcp [macaddr][@vlan]"
+  echo "pipework route <guest> <route_command>"
   echo "pipework --wait [-i containerinterface]"
   exit 1
 }
@@ -107,6 +109,8 @@ if [ -z "$WAIT" ]; then
         IFTYPE=bridge
         BRTYPE=openvswitch
         ;;
+      route*)
+        IFTYPE=route
       dummy*)
         IFTYPE=dummy
         ;;
@@ -178,45 +182,48 @@ case "$N" in
   *) die 1 "Found more than one container matching $GUESTNAME." ;;
 esac
 
-case "$IPADDR" in
-  # Let's check first if the user asked for DHCP allocation.
-  dhcp|dhcp:*)
-    # Use Docker-specific strategy to run the DHCP client
-    # from the busybox image, in the network namespace of
-    # the container.
-    if ! [ "$DOCKERPID" ]; then
-      warn "You asked for a Docker-specific DHCP method."
-      warn "However, $GUESTNAME doesn't seem to be a Docker container."
-      warn "Try to replace 'dhcp' with another option?"
-      die 1 "Aborting."
-    fi
-    DHCP_CLIENT=${IPADDR%%:*}
-    ;;
-  udhcpc|udhcpc:*|udhcpc-f|udhcpc-f:*|dhcpcd|dhcpcd:*|dhclient|dhclient:*|dhclient-f|dhclient-f:*)
-    DHCP_CLIENT=${IPADDR%%:*}
-    # did they ask for the client to remain?
-    DHCP_FOREGROUND=
-    [ "${DHCP_CLIENT: -2}" = '-f' ] && {
-      DHCP_FOREGROUND=true
-    }
-    DHCP_CLIENT=${DHCP_CLIENT%-f}
-    if ! installed "$DHCP_CLIENT"; then
-      die 1 "You asked for DHCP client $DHCP_CLIENT, but I can't find it."
-    fi
-    ;;
-  # Alright, no DHCP? Then let's see if we have a subnet *and* gateway.
-  */*@*)
-    GATEWAY="${IPADDR#*@}" GATEWAY="${GATEWAY%%@*}"
-    IPADDR="${IPADDR%%@*}"
-    ;;
-  # No gateway? We need at least a subnet, anyway!
-  */*) : ;;
-  # ... No? Then stop right here.
-  *)
-    warn "The IP address should include a netmask."
-    die 1 "Maybe you meant $IPADDR/24 ?"
-    ;;
-esac
+# only check IPADDR if we are not in a route mode
+[ "$IFTYPE" != route ] && {
+  case "$IPADDR" in
+	  # Let's check first if the user asked for DHCP allocation.
+	  dhcp|dhcp:*)
+	    # Use Docker-specific strategy to run the DHCP client
+	    # from the busybox image, in the network namespace of
+	    # the container.
+	    if ! [ "$DOCKERPID" ]; then
+	      warn "You asked for a Docker-specific DHCP method."
+	      warn "However, $GUESTNAME doesn't seem to be a Docker container."
+	      warn "Try to replace 'dhcp' with another option?"
+	      die 1 "Aborting."
+	    fi
+	    DHCP_CLIENT=${IPADDR%%:*}
+	    ;;
+	  udhcpc|udhcpc:*|udhcpc-f|udhcpc-f:*|dhcpcd|dhcpcd:*|dhclient|dhclient:*|dhclient-f|dhclient-f:*)
+	    DHCP_CLIENT=${IPADDR%%:*}
+	    # did they ask for the client to remain?
+	    DHCP_FOREGROUND=
+	    [ "${DHCP_CLIENT: -2}" = '-f' ] && {
+	      DHCP_FOREGROUND=true
+	    }
+	    DHCP_CLIENT=${DHCP_CLIENT%-f}
+	    if ! installed "$DHCP_CLIENT"; then
+	      die 1 "You asked for DHCP client $DHCP_CLIENT, but I can't find it."
+	    fi
+	    ;;
+	  # Alright, no DHCP? Then let's see if we have a subnet *and* gateway.
+	  */*@*)
+	    GATEWAY="${IPADDR#*@}" GATEWAY="${GATEWAY%%@*}"
+	    IPADDR="${IPADDR%%@*}"
+	    ;;
+	  # No gateway? We need at least a subnet, anyway!
+	  */*) : ;;
+	  # ... No? Then stop right here.
+	  *)
+	    warn "The IP address should include a netmask."
+	    die 1 "Maybe you meant $IPADDR/24 ?"
+	    ;;
+  esac
+}
 
 # If a DHCP method was specified, extract the DHCP options.
 if [ "$DHCP_CLIENT" ]; then
@@ -260,7 +267,8 @@ ln -s "/proc/$NSPID/ns/net" "/var/run/netns/$NSPID"
   }
 }
 
-[ "$IFTYPE" != "dummy" ] && MTU=$(ip link show "$IFNAME" | awk '{print $5}')
+[ "$IFTYPE" != "route" && "$IFTYPE" != "dummy" ] && MTU=$(ip link show "$IFNAME" | awk '{print $5}')
+
 # If it's a bridge, we need to create a veth pair
 [ "$IFTYPE" = bridge ] && {
   if [ -z "$LOCAL_IFNAME" ]; then
@@ -330,77 +338,81 @@ ln -s "/proc/$NSPID/ns/net" "/var/run/netns/$NSPID"
   ip link add dev "$GUEST_IFNAME" type dummy
 }
 
-ip link set "$GUEST_IFNAME" netns "$NSPID"
-ip netns exec "$NSPID" ip link set "$GUEST_IFNAME" name "$CONTAINER_IFNAME"
-[ "$MACADDR" ] && ip netns exec "$NSPID" ip link set dev "$CONTAINER_IFNAME" address "$MACADDR"
+# if its a route interface, run the route command else set up the interface
+if [ "$IFTYPE" = route ]; then
+  ip netns exec "$NSPID" ip route $ROUTECMD
+else 
+  ip link set "$GUEST_IFNAME" netns "$NSPID"
+  ip netns exec "$NSPID" ip link set "$GUEST_IFNAME" name "$CONTAINER_IFNAME"
+  [ "$MACADDR" ] && ip netns exec "$NSPID" ip link set dev "$CONTAINER_IFNAME" address "$MACADDR"
 
-# When using any of the DHCP methods, we start a DHCP client in the
-# network namespace of the container. With the 'dhcp' method, the
-# client used is taken from the Docker busybox image (therefore
-# requiring no specific client installed on the host). Other methods
-# use a locally installed client.
-case "$DHCP_CLIENT" in
-  dhcp)
-    docker run -d --net container:$GUESTNAME --cap-add NET_ADMIN \
-           busybox udhcpc -i "$CONTAINER_IFNAME" -x "hostname:$GUESTNAME" \
-           $DHCP_OPTIONS \
-           >/dev/null
-    ;;
-  udhcpc)
-    DHCP_Q="-q"
-    [ "$DHCP_FOREGROUND" ] && {
-      DHCP_OPTIONS="$DHCP_OPTIONS -f"
-    }
-    ip netns exec "$NSPID" "$DHCP_CLIENT" -qi "$CONTAINER_IFNAME" \
-                                          -x "hostname:$GUESTNAME" \
-                                          -p "/var/run/udhcpc.$GUESTNAME.pid" \
-                                          $DHCP_OPTIONS
-    [ ! "$DHCP_FOREGROUND" ] && {
-      rm "/var/run/udhcpc.$GUESTNAME.pid"
-    }
-    ;;
-  dhclient)
-    ip netns exec "$NSPID" "$DHCP_CLIENT" "$CONTAINER_IFNAME" \
-                                          -pf "/var/run/dhclient.$GUESTNAME.pid" \
-                                          -lf "/etc/dhclient/dhclient.$GUESTNAME.leases" \
-                                          $DHCP_OPTIONS
-    # kill dhclient after get ip address to prevent device be used after container close
-    [ ! "$DHCP_FOREGROUND" ] && {
-      kill "$(cat "/var/run/dhclient.$GUESTNAME.pid")"
-      rm "/var/run/dhclient.$GUESTNAME.pid"
-    }
-    ;;
-  dhcpcd)
-    ip netns exec "$NSPID" "$DHCP_CLIENT" -q "$CONTAINER_IFNAME" -h "$GUESTNAME"
-    ;;
-  "")
-    if installed ipcalc; then
-      eval $(ipcalc -b $IPADDR)
-      ip netns exec "$NSPID" ip addr add "$IPADDR" brd "$BROADCAST" dev "$CONTAINER_IFNAME"
-    else
-      ip netns exec "$NSPID" ip addr add "$IPADDR" dev "$CONTAINER_IFNAME"
-    fi
+	# When using any of the DHCP methods, we start a DHCP client in the
+	# network namespace of the container. With the 'dhcp' method, the
+	# client used is taken from the Docker busybox image (therefore
+	# requiring no specific client installed on the host). Other methods
+	# use a locally installed client.
+	case "$DHCP_CLIENT" in
+	  dhcp)
+	    docker run -d --net container:$GUESTNAME --cap-add NET_ADMIN \
+	           busybox udhcpc -i "$CONTAINER_IFNAME" -x "hostname:$GUESTNAME" \
+	           $DHCP_OPTIONS \
+	           >/dev/null
+	    ;;
+	  udhcpc)
+	    DHCP_Q="-q"
+	    [ "$DHCP_FOREGROUND" ] && {
+	      DHCP_OPTIONS="$DHCP_OPTIONS -f"
+	    }
+	    ip netns exec "$NSPID" "$DHCP_CLIENT" -qi "$CONTAINER_IFNAME" \
+	                                          -x "hostname:$GUESTNAME" \
+	                                          -p "/var/run/udhcpc.$GUESTNAME.pid" \
+	                                          $DHCP_OPTIONS
+	    [ ! "$DHCP_FOREGROUND" ] && {
+	      rm "/var/run/udhcpc.$GUESTNAME.pid"
+	    }
+	    ;;
+	  dhclient)
+	    ip netns exec "$NSPID" "$DHCP_CLIENT" "$CONTAINER_IFNAME" \
+	                                          -pf "/var/run/dhclient.$GUESTNAME.pid" \
+	                                          -lf "/etc/dhclient/dhclient.$GUESTNAME.leases" \
+	                                          $DHCP_OPTIONS
+	    # kill dhclient after get ip address to prevent device be used after container close
+	    [ ! "$DHCP_FOREGROUND" ] && {
+	      kill "$(cat "/var/run/dhclient.$GUESTNAME.pid")"
+	      rm "/var/run/dhclient.$GUESTNAME.pid"
+	    }
+	    ;;
+	  dhcpcd)
+	    ip netns exec "$NSPID" "$DHCP_CLIENT" -q "$CONTAINER_IFNAME" -h "$GUESTNAME"
+	    ;;
+	  "")
+	    if installed ipcalc; then
+	      eval $(ipcalc -b $IPADDR)
+	      ip netns exec "$NSPID" ip addr add "$IPADDR" brd "$BROADCAST" dev "$CONTAINER_IFNAME"
+	    else
+	      ip netns exec "$NSPID" ip addr add "$IPADDR" dev "$CONTAINER_IFNAME"
+	    fi
 
-    [ "$GATEWAY" ] && {
-      ip netns exec "$NSPID" ip route delete default >/dev/null 2>&1 && true
-    }
-    ip netns exec "$NSPID" ip link set "$CONTAINER_IFNAME" up
-    [ "$GATEWAY" ] && {
-      ip netns exec "$NSPID" ip route get "$GATEWAY" >/dev/null 2>&1 || \
-      ip netns exec "$NSPID" ip route add "$GATEWAY/32" dev "$CONTAINER_IFNAME"
-      ip netns exec "$NSPID" ip route replace default via "$GATEWAY"
-    }
-    ;;
-esac
+	    [ "$GATEWAY" ] && {
+	      ip netns exec "$NSPID" ip route delete default >/dev/null 2>&1 && true
+	    }
+	    ip netns exec "$NSPID" ip link set "$CONTAINER_IFNAME" up
+	    [ "$GATEWAY" ] && {
+	      ip netns exec "$NSPID" ip route get "$GATEWAY" >/dev/null 2>&1 || \
+	      ip netns exec "$NSPID" ip route add "$GATEWAY/32" dev "$CONTAINER_IFNAME"
+	      ip netns exec "$NSPID" ip route replace default via "$GATEWAY"
+	    }
+	    ;;
+	esac
 
-# Give our ARP neighbors a nudge about the new interface
-if installed arping; then
-  IPADDR=$(echo "$IPADDR" | cut -d/ -f1)
-  ip netns exec "$NSPID" arping -c 1 -A -I "$CONTAINER_IFNAME" "$IPADDR" > /dev/null 2>&1 || true
-else
-  echo "Warning: arping not found; interface may not be immediately reachable"
+  # Give our ARP neighbors a nudge about the new interface
+  if installed arping; then
+    IPADDR=$(echo "$IPADDR" | cut -d/ -f1)
+    ip netns exec "$NSPID" arping -c 1 -A -I "$CONTAINER_IFNAME" "$IPADDR" > /dev/null 2>&1 || true
+  else
+    echo "Warning: arping not found; interface may not be immediately reachable"
+  fi
 fi
-
 # Remove NSPID to avoid `ip netns` catch it.
 rm -f "/var/run/netns/$NSPID"
 
