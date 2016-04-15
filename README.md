@@ -11,6 +11,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
 - [Things to note](#things-to-note)
+  - [vCenter / vSphere / ESX / ESXi](#vcenter--vsphere--esx--esxi)
   - [Virtualbox](#virtualbox)
   - [Docker](#docker)
 - [LAMP stack with a private network between the MySQL and Apache containers](#lamp-stack-with-a-private-network-between-the-mysql-and-apache-containers)
@@ -24,28 +25,46 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 - [Let the Docker host communicate over macvlan interfaces](#let-the-docker-host-communicate-over-macvlan-interfaces)
 - [Wait for the network to be ready](#wait-for-the-network-to-be-ready)
 - [Add the interface without an IP address](#add-the-interface-without-an-ip-address)
+- [Add a dummy interface](#add-a-dummy-interface)
 - [DHCP](#dhcp)
 - [DHCP Options](#dhcp-options)
 - [Specify a custom MAC address](#specify-a-custom-mac-address)
 - [Virtual LAN (VLAN)](#virtual-lan-vlan)
 - [Control routes](#routes)
 - [Support Open vSwitch](#support-open-vswitch)
-- [Support Infiniband IPoIB](#support-infiniband-ipoib)
+- [Support InfiniBand IPoIB](#support-infiniband-ipoib)
 - [Cleanup](#cleanup)
+- [Integrating pipework with other tools](#integrating-pipework-with-other-tools)
 - [About this file](#about-this-file)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-
 ### Things to note
 
-#### Virtualbox
+#### vCenter / vSphere / ESX / ESXi
+**If you use vCenter / VSphere / ESX / ESXi,** set or ask your administrator
+to set *Network Security Policies* of the vSwitch as below:
 
+- Promiscuous mode:    **Accept**
+- MAC address changes: **Accept**
+- Forged transmits:    **Accept**
+
+After starting the guest OS and creating a bridge, you might also need to
+fine-tune the `br1` interface as follows:
+
+- `brctl stp br1 off` (to disable the STP protocol and prevent the switch
+  from disabling ports)
+- `brctl setfd br1 2` (to reduce the time taken by the `br1` interface to go
+  from *blocking* to *forwarding* state)
+- `brctl setmaxage br1 0`
+
+#### Virtualbox
 **If you use VirtualBox**, you will have to update your VM network settings.
 Open the settings panel for the VM, go the the "Network" tab, pull down the
 "Advanced" settings. Here, the "Adapter Type" should be `pcnet` (the full
 name is something like "PCnet-FAST III"), instead of the default `e1000`
 (Intel PRO/1000). Also, "Promiscuous Mode" should be set to "Allow All".
+
 If you don't do that, bridged containers won't work, because the virtual
 NIC will filter out all packets with a different MAC address.  If you are
 running VirtualBox in headless mode, the command line equivalent of the above
@@ -58,6 +77,11 @@ config.vm.provider "virtualbox" do |v|
   v.customize ['modifyvm', :id, '--nicpromisc1', 'allow-all']
 end
 ```
+
+Note: it looks like some operating systems (e.g. CentOS 7) do not support
+`pcnet` anymore. You might want to use the `virtio-net` (Paravirtualized
+Network) interface with those.
+
 
 #### Docker
 
@@ -130,7 +154,7 @@ By default pipework creates a new interface `eth1` inside the container. In case
 
 `pipework br1 -i eth2 ...`
 
-**Note:**: for infiniband IPoIB interfaces, the default interface name is `ib0` and not `eth1`.
+**Note:**: for InfiniBand IPoIB interfaces, the default interface name is `ib0` and not `eth1`.
 
 
 ### Setting host interface name ##
@@ -235,6 +259,14 @@ but without configuring an IP address:
     pipework br1 $CONTAINERID 0/0
 
 
+### Add a dummy interface
+
+If for some reason you want a dummy interface inside the container, you can add it like any other interface. Just set the host interface to the keyword dummy. All other options - IP, CIDR, gateway - function as normal.
+
+    pipework dummy $CONTAINERID 192.168.21.101/24@192.168.21.1
+
+Of course, a gateway does not mean much in the context of a dummy interface, but there it is.
+
 ### DHCP
 
 You can use DHCP to obtain the IP address of the new interface. Just
@@ -283,6 +315,31 @@ originating from unknown MAC addresses; meaning that you have to go
 through extra hoops if you want it to work properly.
 
 It works fine on plain old wired Ethernet, though.
+
+#### Lease Renewal
+
+All of the DHCP options - udhcpc, dhcp, dhclient, dhcpcd - exit or are killed by pipework when they are done assigning a lease. This is to prevent zombie processes from existing after a container exits, but the dhcp client still exists.
+
+However, if the container is long-running - longer than the life of the lease - then the lease will expire, no dhcp client renews the lease, and the container is stuck without a valid IP address.
+
+To resolve this problem, you can cause the dhcp client to remain alive. The method depends on the dhcp client you use.
+
+* dhcp: see the next section [DHCP Options](#dhcp-options)
+* dhclient: use DHCP client `dhclient-f`
+* udhcpc: use DHCP client `udhcpc-f`
+* dhcpcd: not yet supported.
+
+
+**Note:** If you use this option *you* will be responsible for finding and killing those dhcp client processes in the future. pipework is a one-time script; it is not intended to manage long-running processes for you.
+
+In order to find the processes, you can look for pidfiles in the following locations:
+
+* dhcp: see the next section [DHCP Options](#dhcp-options)
+* dhclient: pidfiles in `/var/run/dhclient.$GUESTNAME.pid`
+* udhcpc: pidfiles in `/var/run/udhcpc.$GUESTNAME.pid`
+* dhcpcd: not yet supported
+
+`$GUESTNAME` is the name or ID of the guest as you passed it to pipework on instantiation.
 
 
 ### DHCP Options
@@ -346,6 +403,16 @@ In other words, if your MAC address is `?X:??:??:??:??:??`, `X` should
 be `2`, `6`, `a`, or `e`. You can check [Wikipedia](
 http://en.wikipedia.org/wiki/MAC_address) if you want even more details.
 
+If you want a consistent MAC address across container restarts, but don't want to have to keep track of the messy MAC addresses, ask pipework to generate an address for you based on a specified string, e.g. the hostname. This guarantees a consistent MAC address:
+
+    pipework eth0 <container> dhcp U:<some_string>
+
+pipework will take *some_string* and hash it using MD5. It will then take the first 40 bits of the MD5 hash, add those to the locally administered prefix of 0x02, and create a unique MAC address.
+
+For example, if your unique string is "myhost.foo.com", then the MAC address will **always** be `02:72:6c:cd:9b:8d`.
+
+This is particularly useful in the case of DHCP, where you might want the container to stop and start, but always get the same address. Most DHCP servers will keep giving you a consistent IP address if the MAC address is consistent.
+
 **Note:**  Setting the MAC address of an IPoIB interface is not supported.
 
 ### Virtual LAN (VLAN)
@@ -386,15 +453,30 @@ If you want to attach a container to the Open vSwitch bridge, no problem.
 If the ovs bridge doesn't exist, it will be automatically created
 
 
-### Support Infiniband IPoIB
+### Support InfiniBand IPoIB
 
-Passing an IPoIB interface to a container is supported.  However, the entire device
-is moved into the network namespace of the container.  It therefore becomes hidden
-from the host.  
+Passing an IPoIB interface to a container is supported.  The IPoIB device is
+created as a virtual device, similarly to how macvlan devices work.  The
+interface also supports setting a partition key for the created virtual device.
 
-To provide infiniband to multiple containers, use SR-IOV and pass
-the virtual function devices to the containers.
-  
+The following will attach a container to ib0
+
+    pipework ib0 $CONTAINERID 10.10.10.10/24
+
+The following will do the same but connect it to ib0 with pkey 0x8001
+
+    pipework ib0 $CONTAINERID 10.10.10.10/24 @8001
+
+### Gratuitous ARP
+
+If `arping` is installed, it will be used to send a gratuitous ARP reply
+to the container's neighbors. This can be useful if the container doesn't
+emit any network traffic at all, and seems unreachable (but suddenly becomes
+reachable after it generates some traffic).
+
+Note, however, that Ubuntu/Debian distributions contain two different `arping`
+packages. The one you want is `iputils-arping`.
+
 
 ### Cleanup
 
@@ -402,6 +484,19 @@ When a container is terminated (the last process of the net namespace exits),
 the network interfaces are garbage collected. The interface in the container
 is automatically destroyed, and the interface in the docker host (part of the
 bridge) is then destroyed as well.
+
+
+### Integrating pipework with other tools
+
+@dreamcat4 has built an amazing fork of pipework that can be integrated
+with other tools in the Docker ecosystem, like Compose or Crane.
+It can be used in "one shot," to create a bunch of network connections
+between containers; it can run in the background as a daemon, watching
+the Docker events API, and automatically invoke pipework when containers
+are started, and it can also expose pipework itself through an API.
+
+For more info, check the [dreamcat4/pipework](https://hub.docker.com/r/dreamcat4/pipework/)
+image on the Docker Hub.
 
 
 ### About this file
