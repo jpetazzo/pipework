@@ -182,8 +182,14 @@ interfaces eth2 and eth3, using specific (public) IP addresses. Easy!
     pipework eth3 $(docker run -d hipache /usr/sbin/hipache) 107.22.140.5/24
 
 Note that this will use `macvlan` subinterfaces, so you can actually put
-multiple containers on the same physical interface.
+multiple containers on the same physical interface.  If you don't want to
+virtualize the interface, you can use the `--direct-phys` option to namespace
+an interface exclusively to a container without using a macvlan bridge.
 
+    pipework --direct-phys eth1 $CONTAINERID 192.168.1.2/24
+
+This is useful for assigning SR-IOV VFs to containers, but be aware of added
+latency when using the NIC to switch packets between containers on the same host.
 
 <a name="macvlan"/>
 ### Let the Docker host communicate over macvlan interfaces
