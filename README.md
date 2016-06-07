@@ -79,7 +79,7 @@ end
 ```
 
 Note: it looks like some operating systems (e.g. CentOS 7) do not support
-`pcnet` anymore. You might want to use the `virtio-net` (Paravirtualized
+`pcnet` anymore. You might want to use the `virtio-net` (`'--nictype1', 'virtio'`) (Paravirtualized
 Network) interface with those.
 
 
