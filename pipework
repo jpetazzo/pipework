@@ -27,6 +27,13 @@ if [ "$2" = "-l" ]; then
   shift 2
 fi
 
+#inet or inet6
+FAMILY_FLAG="-4"
+if [ "$2" = "-a" ]; then
+  FAMILY_FLAG="-$3"
+  shift 2
+fi
+
 GUESTNAME=$2
 IPADDR=$3
 MACADDR=$4
@@ -55,7 +62,7 @@ esac
 
 [ "$IPADDR" ] || [ "$WAIT" ] || {
   echo "Syntax:"
-  echo "pipework <hostinterface> [-i containerinterface] [-l localinterfacename] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
+  echo "pipework <hostinterface> [-i containerinterface] [-l localinterfacename] [-a addressfamily] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
   echo "pipework <hostinterface> [-i containerinterface] [-l localinterfacename] <guest> dhcp [macaddr][@vlan]"
   echo "pipework route <guest> <route_command>"
   echo "pipework --wait [-i containerinterface]"
@@ -83,7 +90,7 @@ die () {
 
 # First step: determine type of first argument (bridge, physical interface...),
 # Unless "--wait" is set (then skip the whole section)
-if [ -z "$WAIT" ]; then 
+if [ -z "$WAIT" ]; then
   if [ -d "/sys/class/net/$IFNAME" ]
   then
     if [ -d "/sys/class/net/$IFNAME/bridge" ]; then
@@ -353,7 +360,7 @@ if [ "$IFTYPE" = route ]; then
   # ... discard the first two arguments and pass the rest to the route command.
   shift 2
   ip netns exec "$NSPID" ip route "$@"
-else 
+else
   # Otherwise, run normally.
   ip link set "$GUEST_IFNAME" netns "$NSPID"
   ip netns exec "$NSPID" ip link set "$GUEST_IFNAME" name "$CONTAINER_IFNAME"
@@ -401,19 +408,19 @@ else
 	  "")
 	    if installed ipcalc; then
 	      eval $(ipcalc -b $IPADDR)
-	      ip netns exec "$NSPID" ip addr add "$IPADDR" brd "$BROADCAST" dev "$CONTAINER_IFNAME"
+	      ip netns exec "$NSPID" ip "$FAMILY_FLAG" addr add "$IPADDR" brd "$BROADCAST" dev "$CONTAINER_IFNAME"
 	    else
-	      ip netns exec "$NSPID" ip addr add "$IPADDR" dev "$CONTAINER_IFNAME"
+	      ip netns exec "$NSPID" ip "$FAMILY_FLAG" addr add "$IPADDR" dev "$CONTAINER_IFNAME"
 	    fi
 
 	    [ "$GATEWAY" ] && {
-	      ip netns exec "$NSPID" ip route delete default >/dev/null 2>&1 && true
+	      ip netns exec "$NSPID" ip "$FAMILY_FLAG" route delete default >/dev/null 2>&1 && true
 	    }
-	    ip netns exec "$NSPID" ip link set "$CONTAINER_IFNAME" up
+	    ip netns exec "$NSPID" ip "$FAMILY_FLAG" link set "$CONTAINER_IFNAME" up
 	    [ "$GATEWAY" ] && {
-	      ip netns exec "$NSPID" ip route get "$GATEWAY" >/dev/null 2>&1 || \
-	      ip netns exec "$NSPID" ip route add "$GATEWAY/32" dev "$CONTAINER_IFNAME"
-	      ip netns exec "$NSPID" ip route replace default via "$GATEWAY"
+	      ip netns exec "$NSPID" ip "$FAMILY_FLAG" route get "$GATEWAY" >/dev/null 2>&1 || \
+	      ip netns exec "$NSPID" ip "$FAMILY_FLAG" route add "$GATEWAY/32" dev "$CONTAINER_IFNAME"
+	      ip netns exec "$NSPID" ip "$FAMILY_FLAG" route replace default via "$GATEWAY" dev "$CONTAINER_IFNAME"
 	    }
 	    ;;
 	esac
