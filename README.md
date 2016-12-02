@@ -474,7 +474,7 @@ If you want to use `tc` from within the container namespace, you can do so with 
 
 Example, to simulate 30% packet loss on `eth0` within the container:
 
-  pipework tc $CONTAINERID qdisc add dev eth0 root netem loss 30%
+    pipework tc $CONTAINERID qdisc add dev eth0 root netem loss 30%
 
 
 ### Support Open vSwitch
