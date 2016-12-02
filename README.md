@@ -467,6 +467,16 @@ Note that for these rules to work you first need to execute the following in you
 You can read more on using route tables, specifically to setup multiple NICs with different default gateways,
 here: https://kindlund.wordpress.com/2007/11/19/configuring-multiple-default-routes-in-linux/
 
+### Control `tc`
+
+If you want to use `tc` from within the container namespace, you can do so with the command
+`pipework tc $CONTAINERID <tc_args>`.
+
+Example, to simulate 30% packet loss on `eth0` within the container:
+
+  pipework tc $CONTAINERID qdisc add dev eth0 root netem loss 30%
+
+
 ### Support Open vSwitch
 
 If you want to attach a container to the Open vSwitch bridge, no problem.
