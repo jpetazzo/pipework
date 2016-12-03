@@ -65,6 +65,8 @@ esac
   echo "pipework <hostinterface> [-i containerinterface] [-l localinterfacename] [-a addressfamily] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
   echo "pipework <hostinterface> [-i containerinterface] [-l localinterfacename] <guest> dhcp [macaddr][@vlan]"
   echo "pipework route <guest> <route_command>"
+  echo "pipework rule <guest> <rule_command>"
+  echo "pipework tc <guest> <tc_command>"
   echo "pipework --wait [-i containerinterface]"
   exit 1
 }
@@ -121,6 +123,12 @@ if [ -z "$WAIT" ]; then
         ;;
       route*)
         IFTYPE=route
+        ;;
+      rule*)
+        IFTYPE=rule
+        ;;
+      tc*)
+        IFTYPE=tc
         ;;
       dummy*)
         IFTYPE=dummy
@@ -194,7 +202,7 @@ case "$N" in
 esac
 
 # only check IPADDR if we are not in a route mode
-[ "$IFTYPE" != route ] && {
+[ "$IFTYPE" != route ] && [ "$IFTYPE" != rule ] && [ "$IFTYPE" != tc ] && {
   case "$IPADDR" in
 	  # Let's check first if the user asked for DHCP allocation.
 	  dhcp|dhcp:*)
@@ -278,7 +286,7 @@ ln -s "/proc/$NSPID/ns/net" "/var/run/netns/$NSPID"
   }
 }
 
-[ "$IFTYPE" != "route" ] && [ "$IFTYPE" != "dummy" ] && MTU=$(ip link show "$IFNAME" | awk '{print $5}')
+[ "$IFTYPE" != "route" ] && [ "$IFTYPE" != "dummy" ] && [ "$IFTYPE" != "rule" ] && [ "$IFTYPE" != "tc" ] && MTU=$(ip link show "$IFNAME" | awk '{print $5}')
 
 # If it's a bridge, we need to create a veth pair
 [ "$IFTYPE" = bridge ] && {
@@ -360,6 +368,12 @@ if [ "$IFTYPE" = route ]; then
   # ... discard the first two arguments and pass the rest to the route command.
   shift 2
   ip netns exec "$NSPID" ip route "$@"
+elif [ "$IFTYPE" = rule ] ; then
+  shift 2
+  ip netns exec "$NSPID" ip rule "$@"
+elif [ "$IFTYPE" = tc ] ; then
+  shift 2
+  ip netns exec "$NSPID" tc "$@"
 else
   # Otherwise, run normally.
   ip link set "$GUEST_IFNAME" netns "$NSPID"

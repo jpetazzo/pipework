@@ -2,8 +2,8 @@
 
 **_Software-Defined Networking for Linux Containers_**
 
-Pipework lets you connect together containers in arbitrarily complex scenarios. 
-Pipework uses cgroups and namespace and works with "plain" LXC containers 
+Pipework lets you connect together containers in arbitrarily complex scenarios.
+Pipework uses cgroups and namespace and works with "plain" LXC containers
 (created with `lxc-start`), and with the awesome [Docker](http://www.docker.io/).
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
@@ -219,7 +219,7 @@ macvlan interfaces is segregated from the "root" interface.
 
 If you want to enable that kind of communication, no problem: just
 create a macvlan interface in your host, and move the IP address from
-the "normal" interface to the macvlan interface. 
+the "normal" interface to the macvlan interface.
 
 For instance, on a machine where `eth0` is the main interface, and has
 address `10.1.1.123/24`, with gateway `10.1.1.254`, you would do this:
@@ -447,6 +447,35 @@ Here are some examples.
     pipework route $CONTAINERID replace default via 10.2.3.5.78
 
 Everything after the container ID (or name) will be run as an argument to `ip route` inside the container's namespace. Use the iproute2 man page.
+
+### Control Rules
+
+If you want to add/delete/replace IP rules in the container, you can do the same thing with `ip rule` that you can with
+`ip route`.
+
+Specify the interface to be `rule`, followed by the container ID or name, followed by the rule command.
+
+Here are some examples, to specify a route table:
+
+    pipework rule $CONTAINERID add from 172.19.0.2/32 table 1
+    pipework rule $CONTAINERID add to 172.19.0.2/32 table 1
+
+Note that for these rules to work you first need to execute the following in your container:
+
+  echo "1 admin" >> /etc/iproute2/rt_tables
+
+You can read more on using route tables, specifically to setup multiple NICs with different default gateways,
+here: https://kindlund.wordpress.com/2007/11/19/configuring-multiple-default-routes-in-linux/
+
+### Control `tc`
+
+If you want to use `tc` from within the container namespace, you can do so with the command
+`pipework tc $CONTAINERID <tc_args>`.
+
+Example, to simulate 30% packet loss on `eth0` within the container:
+
+    pipework tc $CONTAINERID qdisc add dev eth0 root netem loss 30%
+
 
 ### Support Open vSwitch
 
