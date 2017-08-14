@@ -224,7 +224,7 @@ esac
 	    DHCP_CLIENT=${IPADDR%%:*}
 	    # did they ask for the client to remain?
 	    DHCP_FOREGROUND=
-	    [ "${DHCP_CLIENT: -2}" = '-f' ] && {
+	    [ "${DHCP_CLIENT%-f}" != "${DHCP_CLIENT}" ] && {
 	      DHCP_FOREGROUND=true
 	    }
 	    DHCP_CLIENT=${DHCP_CLIENT%-f}
