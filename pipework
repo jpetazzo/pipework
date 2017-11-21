@@ -64,6 +64,8 @@ esac
   echo "Syntax:"
   echo "pipework <hostinterface> [-i containerinterface] [-l localinterfacename] [-a addressfamily] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
   echo "pipework <hostinterface> [-i containerinterface] [-l localinterfacename] <guest> dhcp [macaddr][@vlan]"
+  echo "pipework mac:<hostinterface_macaddress> [-i containerinterface] [-l localinterfacename] [-a addressfamily] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
+  echo "pipework mac:<hostinterface_macaddress> [-i containerinterface] [-l localinterfacename] <guest> dhcp [macaddr][@vlan]"
   echo "pipework route <guest> <route_command>"
   echo "pipework rule <guest> <rule_command>"
   echo "pipework tc <guest> <tc_command>"
@@ -89,6 +91,23 @@ die () {
   warn "$@"
   exit "$status"
 }
+
+if echo $IFNAME | grep -q '^mac:'; then
+  mac_address=$(echo $IFNAME | cut -c5-)
+  ifmatch=
+  for iftest in /sys/class/net/*; do
+    if [ -f $iftest/address ] && [ "$mac_address" = "$(cat $iftest/address)" ]; then
+      ifmatch="$(basename $iftest)"
+      break
+    fi
+  done
+
+  if [ -z "$ifmatch" ]; then
+    die 1 "Mac address $mac_address specified for interface but no host interface matched."
+  else
+    IFNAME=$ifmatch
+  fi
+fi
 
 # First step: determine type of first argument (bridge, physical interface...),
 # Unless "--wait" is set (then skip the whole section)
