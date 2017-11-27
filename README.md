@@ -22,6 +22,7 @@ Pipework uses cgroups and namespace and works with "plain" LXC containers
 - [Using a different netmask](#using-a-different-netmask)
 - [Setting a default gateway](#setting-a-default-gateway)
 - [Connect a container to a local physical interface](#connect-a-container-to-a-local-physical-interface)
+- [Use MAC address to specify physical interface](#use-mac-address-to-specify-physical-interface)
 - [Let the Docker host communicate over macvlan interfaces](#let-the-docker-host-communicate-over-macvlan-interfaces)
 - [Wait for the network to be ready](#wait-for-the-network-to-be-ready)
 - [Add the interface without an IP address](#add-the-interface-without-an-ip-address)
@@ -209,6 +210,23 @@ an interface exclusively to a container without using a macvlan bridge.
 
 This is useful for assigning SR-IOV VFs to containers, but be aware of added
 latency when using the NIC to switch packets between containers on the same host.
+
+
+### Use MAC address to specify physical interface
+
+In case you want to connect a local physical interface with a specific name inside
+the container, it will also rename the physical one, this behaviour is not
+idempotent:
+
+    pipework --direct-phys eth1 -i container0 $CONTAINERID 0/0
+    # second call would fail because physical interface eth1 has been renamed
+
+We can use the interface MAC address to identify the interface the same way
+any time (udev networking rules use a similar method for interfaces persistent
+naming):
+
+    pipework --direct-phys mac:00:f3:15:4a:42:c8 -i container0 $CONTAINERID 0/0
+
 
 ### Let the Docker host communicate over macvlan interfaces
 
