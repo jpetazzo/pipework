@@ -120,7 +120,7 @@ if [ -z "$WAIT" ]; then
     fi
   else
     case "$IFNAME" in
-      br*)
+      br*|vmbr*)
         IFTYPE=bridge
         BRTYPE=linux
         ;;
