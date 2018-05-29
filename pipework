@@ -15,6 +15,16 @@ esac
 
 IFNAME=$1
 
+case "$IFNAME" in
+  *@*)
+    TOP_IFNAME="${IFNAME#*@}"
+    IFNAME="${IFNAME%%@*}"
+    ;;
+  *)
+    TOP_IFNAME=
+    ;;
+esac
+
 # default value set further down if not set here
 CONTAINER_IFNAME=
 if [ "$2" = "-i" ]; then
@@ -62,8 +72,8 @@ esac
 
 [ "$IPADDR" ] || [ "$WAIT" ] || {
   echo "Syntax:"
-  echo "pipework <hostinterface> [-i containerinterface] [-l localinterfacename] [-a addressfamily] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
-  echo "pipework <hostinterface> [-i containerinterface] [-l localinterfacename] <guest> dhcp [macaddr][@vlan]"
+  echo "pipework <hostinterface>[@topinterface] [-i containerinterface] [-l localinterfacename] [-a addressfamily] <guest> <ipaddr>/<subnet>[@default_gateway] [macaddr][@vlan]"
+  echo "pipework <hostinterface>[@topinterface] [-i containerinterface] [-l localinterfacename] <guest> dhcp [macaddr][@vlan]"
   echo "pipework route <guest> <route_command>"
   echo "pipework rule <guest> <rule_command>"
   echo "pipework tc <guest> <tc_command>"
@@ -110,7 +120,7 @@ if [ -z "$WAIT" ]; then
     fi
   else
     case "$IFNAME" in
-      br*)
+      br*|vmbr*)
         IFTYPE=bridge
         BRTYPE=linux
         ;;
@@ -153,8 +163,8 @@ CONTAINER_IFNAME=${CONTAINER_IFNAME:-eth1}
   exit 0
 }
 
-[ "$IFTYPE" = bridge ] && [ "$BRTYPE" = linux ] && [ "$VLAN" ] && {
-  die 1 "VLAN configuration currently unsupported for Linux bridge."
+[ "$IFTYPE" = bridge ] && [ "$BRTYPE" = linux ] && [ "$VLAN" ] && [ -z "$TOP_IFNAME" ] && {
+  die 1 "VLAN configuration for Linux bridge requires TOPINTERFACE option."
 }
 
 [ "$IFTYPE" = ipoib ] && [ "$MACADDR" ] && {
@@ -274,6 +284,37 @@ fi
   }
 }
 
+# Check if TOP interface not exists
+[ "$IFTYPE" = bridge ] && [ "$TOP_IFNAME" ] && [ -z "$VLAN" ] && [ ! -d "/sys/class/net/$TOP_IFNAME" ] && {
+  die 1 "$TOP_IFNAME is not exists."
+}
+
+[ "$TOP_IFNAME" ] && MTU=$(ip link show "$TOP_IFNAME" | awk '{print $5}')
+
+# Check VLAN for TOP interface
+[ "$IFTYPE" = bridge ] && [ "$TOP_IFNAME" ] && [ "$VLAN" ] && {
+  echo "$TOP_IFNAME" | grep -q '\.' && {
+    die 1 "$TOP_IFNAME is already vlan interface."
+  }
+  [ -d "/sys/class/net/$TOP_IFNAME.$VLAN" ] && {
+    ip -d link show "$TOP_IFNAME.$VLAN" | grep -q "vlan.*id $VLAN" || {
+      die 1 "$TOP_IFNAME.$VLAN already exists but is not a VLAN device for tag $VLAN."
+    }
+  }
+  [ ! -d "/sys/class/net/${TOP_IFNAME}.${VLAN}" ] && {
+    ip link add link "$TOP_IFNAME" name "$TOP_IFNAME.$VLAN" mtu "$MTU" type vlan id "$VLAN"
+  }
+  ip link set "$TOP_IFNAME" up
+  TOP_IFNAME=$TOP_IFNAME.$VLAN
+}
+
+# Check if TOP interface in use
+[ "$IFTYPE" = bridge ] && [ "$TOP_IFNAME" ] && {
+  ip route | grep -q "dev $TOP_IFNAME\( \|$\)" && {
+    die 1 "$TOP_IFNAME have configured routes"
+  }
+}
+
 [ ! -d /var/run/netns ] && mkdir -p /var/run/netns
 rm -f "/var/run/netns/$NSPID"
 ln -s "/proc/$NSPID/ns/net" "/var/run/netns/$NSPID"
@@ -289,7 +330,18 @@ ln -s "/proc/$NSPID/ns/net" "/var/run/netns/$NSPID"
   }
 }
 
-[ "$IFTYPE" != "route" ] && [ "$IFTYPE" != "dummy" ] && [ "$IFTYPE" != "rule" ] && [ "$IFTYPE" != "tc" ] && MTU=$(ip link show "$IFNAME" | awk '{print $5}')
+[ -z "$MTU" ] && [ "$IFTYPE" != "route" ] && [ "$IFTYPE" != "dummy" ] && [ "$IFTYPE" != "rule" ] && [ "$IFTYPE" != "tc" ] && MTU=$(ip link show "$IFNAME" | awk '{print $5}')
+
+# Check if we need to add TOP interface to a bridge.
+[ "$IFTYPE" = bridge ] && [ "$TOP_IFNAME" ] && {
+  ip -d link show "$TOP_IFNAME" | grep -q "master " && {
+    ip -d link show "$TOP_IFNAME" | grep -q "master $IFNAME " || {
+      die 1 "$TOP_IFNAME already have master but is not a $IFNAME"
+    }
+  }
+  (ip link set "$TOP_IFNAME" master "$IFNAME" > /dev/null 2>&1) || (brctl addif "$IFNAME" "$TOP_IFNAME")
+  ip link set "$TOP_IFNAME" up
+}
 
 # If it's a bridge, we need to create a veth pair
 [ "$IFTYPE" = bridge ] && {
