@@ -173,7 +173,8 @@ done < /proc/mounts
 }
 
 # Try to find a cgroup matching exactly the provided name.
-N=$(find "$CGROUPMNT" -name "$GUESTNAME" | wc -l)
+M=$(find "$CGROUPMNT" -name "$GUESTNAME")
+N=$(echo "$M" | wc -l)
 case "$N" in
   0)
     # If we didn't find anything, try to lookup the container with Docker.
@@ -201,6 +202,9 @@ case "$N" in
     fi
     ;;
   1) true ;;
+  2)  # LXC >=3.1.0 returns two entries from the cgroups mount instead of one.
+      echo "$M" | grep -q "lxc\.monitor" || die 1 "Found more than one container matching $GUESTNAME."
+      ;;
   *) die 1 "Found more than one container matching $GUESTNAME." ;;
 esac
 
