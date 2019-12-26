@@ -194,6 +194,9 @@ done < /proc/mounts
 # Try to find a cgroup matching exactly the provided name.
 M=$(find "$CGROUPMNT" -name "$GUESTNAME")
 N=$(echo "$M" | wc -l)
+if [ -z "$M" ] ; then
+    N=0
+fi
 case "$N" in
   0)
     # If we didn't find anything, try to lookup the container with Docker.
