@@ -412,7 +412,11 @@ elif [ "$IFTYPE" = tc ] ; then
   ip netns exec "$NSPID" tc "$@"
 else
   # Otherwise, run normally.
-  ip link set "$GUEST_IFNAME" netns "$NSPID"
+  if iw dev | awk '$1=="Interface"{print $2}' | grep $GUEST_IFNAME > /dev/null; then
+    iw phy $(iw dev | grep -B 1 $GUEST_IFNAME | grep phy# | sed 's/#//g') set netns $NSPID
+  else
+    ip link set "$GUEST_IFNAME" netns "$NSPID"
+  fi
   ip netns exec "$NSPID" ip link set "$GUEST_IFNAME" name "$CONTAINER_IFNAME"
   [ "$MACADDR" ] && ip netns exec "$NSPID" ip link set dev "$CONTAINER_IFNAME" address "$MACADDR"
 
