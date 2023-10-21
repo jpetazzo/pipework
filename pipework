@@ -297,6 +297,13 @@ else
   }
 fi
 
+# This avoids segfault when pipework is called twice on the same container
+ip netns exec $NSPID [ -d /sys/class/net/$CONTAINER_IFNAME ] &&
+  echo "A bridge on ${CONTAINER_IFNAME} already exists for ${GUESTNAME}" &&
+  UIFS=$(ls /sys/class/net/${IFNAME}/upper_ph${NSPID}* | sed "s/\/sys\/class\/net\/${IFNAME}\/upper_ph${NSPID}//g") &&
+  echo "$UIFS\nare already taken" &&
+  exit 1
+
 # Check if an incompatible VLAN device already exists
 [ "$IFTYPE" = phys ] && [ "$VLAN" ] && [ -d "/sys/class/net/$IFNAME.VLAN" ] && {
   ip -d link show "$IFNAME.$VLAN" | grep -q "vlan.*id $VLAN" || {
