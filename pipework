@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # This code should (try to) follow Google's Shell Style Guide
 # (https://google.github.io/styleguide/shell.xml)
 set -e
