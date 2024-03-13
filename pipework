@@ -465,8 +465,9 @@ else
 	    ip netns exec "$NSPID" "$DHCP_CLIENT" -q "$CONTAINER_IFNAME" -h "$GUESTNAME"
 	    ;;
 	  "")
-	    if installed ipcalc; then
-	      eval $(ipcalc -b $IPADDR)
+	    # Note: expected busybox ipcalc! CK
+	    if installed busybox; then
+	      eval $(busybox ipcalc -b $IPADDR)
 	      ip netns exec "$NSPID" ip "$FAMILY_FLAG" addr add "$IPADDR" brd "$BROADCAST" dev "$CONTAINER_IFNAME"
 	    else
 	      ip netns exec "$NSPID" ip "$FAMILY_FLAG" addr add "$IPADDR" dev "$CONTAINER_IFNAME"
