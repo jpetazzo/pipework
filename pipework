@@ -432,7 +432,7 @@ else
 	# use a locally installed client.
 	case "$DHCP_CLIENT" in
 	  dhcp)
-	    docker run -d --net container:$GUESTNAME --cap-add NET_ADMIN \
+	    docker run --rm -d --net container:$GUESTNAME --cap-add NET_ADMIN \
 	           busybox udhcpc -i "$CONTAINER_IFNAME" -x "hostname:$GUESTNAME" \
 	           $DHCP_OPTIONS \
 	           >/dev/null
