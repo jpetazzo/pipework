@@ -1,3 +1,15 @@
+⚠️  **WARNING: this project is not maintained.**
+
+It was written in the early days of Docker, when people needed a way to
+"plumb" Docker containers into arbitrary network topologies. If you want
+to use it today (post-2020), you can, but it's at your own risk.
+Small contributions (of a few lines) are welcome, but I don't have
+the time to review and test bigger contributions, so don't expect any
+new features or significant fixes (for instance, if Docker changes the
+way it handles container networking, this will break, and I will not fix it).
+
+Proceed at your own risk! :)
+
 # Pipework
 
 **_Software-Defined Networking for Linux Containers_**
